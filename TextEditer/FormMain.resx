@@ -123,4 +123,16 @@
   <metadata name="toolStripMain.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>175, 17</value>
   </metadata>
+  <assembly alias="System.Drawing" name="System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
+  <data name="tsbtnMonitoring.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAAB8AAAAgCAYAAADqgqNBAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
+        YQUAAAAJcEhZcwAAFiUAABYlAUlSJPAAAAEXSURBVFhH7ZVLDoMgFEVZSpfiUroUlsLAdB2MuwYHLoE4
+        7YDmIeDjAlaTNpDUm5yE1Oq5fKJiWRbbCmGMsa0QtmEueZMcl7/MZ06mYzl7sJ70iq5ztkguPykMzFpu
+        KFZkJx3JUcwertTooXGJ0WolHbzIXoFMXprt42kSpNIRvEbgStRWoR95Ip10/D0RS22FEI7bMCSFwphP
+        YmbbgMnkSUs/xlmTlBgGWVwFfq9bBSqgepZHMRCkJe4eXHZO2EpMfeb85ml7MIr5rPE+Ijl4kH7kTsRP
+        OxTgJRD8b5TSXodrkOrrlTcOZbAQQq/VlVVKlPY6pDO5j5MVPxrHiGV3UpUn4WfBfzwyvvI9L6Wp/Ee5
+        5E3yv/I3J8xyDByTLU8AAAAASUVORK5CYII=
+</value>
+  </data>
 </root>

@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormMain));
             this.menuStripMain = new System.Windows.Forms.MenuStrip();
             this.tsmItemFile = new System.Windows.Forms.ToolStripMenuItem();
             this.tsMenuItemNewFile = new System.Windows.Forms.ToolStripMenuItem();
@@ -39,9 +40,11 @@
             this.tsMenuItemClose = new System.Windows.Forms.ToolStripMenuItem();
             this.tsMenuItemCloseAll = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMain = new System.Windows.Forms.ToolStrip();
+            this.tsbtnMonitoring = new System.Windows.Forms.ToolStripButton();
             this.tcTabControl = new System.Windows.Forms.TabControl();
             this.defaultTabPage = new System.Windows.Forms.TabPage();
             this.menuStripMain.SuspendLayout();
+            this.toolStripMain.SuspendLayout();
             this.tcTabControl.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -74,84 +77,98 @@
             // tsMenuItemNewFile
             // 
             this.tsMenuItemNewFile.Name = "tsMenuItemNewFile";
-            this.tsMenuItemNewFile.Size = new System.Drawing.Size(252, 30);
+            this.tsMenuItemNewFile.Size = new System.Drawing.Size(245, 30);
             this.tsMenuItemNewFile.Text = "New File";
             this.tsMenuItemNewFile.Click += new System.EventHandler(this.tsMenuItemNewFile_Click);
             // 
             // tsMenuItemOpen
             // 
             this.tsMenuItemOpen.Name = "tsMenuItemOpen";
-            this.tsMenuItemOpen.Size = new System.Drawing.Size(252, 30);
+            this.tsMenuItemOpen.Size = new System.Drawing.Size(245, 30);
             this.tsMenuItemOpen.Text = "Open";
             this.tsMenuItemOpen.Click += new System.EventHandler(this.tsMenuItemOpen_Click);
             // 
             // tsMenuItemSave
             // 
             this.tsMenuItemSave.Name = "tsMenuItemSave";
-            this.tsMenuItemSave.Size = new System.Drawing.Size(252, 30);
+            this.tsMenuItemSave.Size = new System.Drawing.Size(245, 30);
             this.tsMenuItemSave.Text = "Save";
             this.tsMenuItemSave.Click += new System.EventHandler(this.tsMenuItemSave_Click);
             // 
             // tsMenuItemSaveAs
             // 
             this.tsMenuItemSaveAs.Name = "tsMenuItemSaveAs";
-            this.tsMenuItemSaveAs.Size = new System.Drawing.Size(252, 30);
+            this.tsMenuItemSaveAs.Size = new System.Drawing.Size(245, 30);
             this.tsMenuItemSaveAs.Text = "SaveAs";
             this.tsMenuItemSaveAs.Click += new System.EventHandler(this.tsMenuItemSaveAs_Click);
             // 
             // tsMenuItemSaveAll
             // 
             this.tsMenuItemSaveAll.Name = "tsMenuItemSaveAll";
-            this.tsMenuItemSaveAll.Size = new System.Drawing.Size(252, 30);
+            this.tsMenuItemSaveAll.Size = new System.Drawing.Size(245, 30);
             this.tsMenuItemSaveAll.Text = "SaveAll";
             this.tsMenuItemSaveAll.Click += new System.EventHandler(this.tsMenuItemSaveAll_Click);
             // 
             // tsMenuItemFileNameChange
             // 
             this.tsMenuItemFileNameChange.Name = "tsMenuItemFileNameChange";
-            this.tsMenuItemFileNameChange.Size = new System.Drawing.Size(252, 30);
+            this.tsMenuItemFileNameChange.Size = new System.Drawing.Size(245, 30);
             this.tsMenuItemFileNameChange.Text = "File Name Change";
             this.tsMenuItemFileNameChange.Click += new System.EventHandler(this.tsMenuItemFileNameChange_Click);
             // 
             // tsMenuItemClose
             // 
             this.tsMenuItemClose.Name = "tsMenuItemClose";
-            this.tsMenuItemClose.Size = new System.Drawing.Size(252, 30);
+            this.tsMenuItemClose.Size = new System.Drawing.Size(245, 30);
             this.tsMenuItemClose.Text = "Close";
             this.tsMenuItemClose.Click += new System.EventHandler(this.tsMenuItemClose_Click);
             // 
             // tsMenuItemCloseAll
             // 
             this.tsMenuItemCloseAll.Name = "tsMenuItemCloseAll";
-            this.tsMenuItemCloseAll.Size = new System.Drawing.Size(252, 30);
+            this.tsMenuItemCloseAll.Size = new System.Drawing.Size(245, 30);
             this.tsMenuItemCloseAll.Text = "CloseAll";
             this.tsMenuItemCloseAll.Click += new System.EventHandler(this.tsMenuItemCloseAll_Click);
             // 
             // toolStripMain
             // 
             this.toolStripMain.ImageScalingSize = new System.Drawing.Size(24, 24);
+            this.toolStripMain.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.tsbtnMonitoring});
             this.toolStripMain.Location = new System.Drawing.Point(0, 33);
             this.toolStripMain.Name = "toolStripMain";
-            this.toolStripMain.Size = new System.Drawing.Size(1860, 25);
+            this.toolStripMain.Size = new System.Drawing.Size(1860, 31);
             this.toolStripMain.TabIndex = 1;
             this.toolStripMain.Text = "toolStrip1";
+            // 
+            // tsbtnMonitoring
+            // 
+            this.tsbtnMonitoring.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            this.tsbtnMonitoring.Image = ((System.Drawing.Image)(resources.GetObject("tsbtnMonitoring.Image")));
+            this.tsbtnMonitoring.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.tsbtnMonitoring.Name = "tsbtnMonitoring";
+            this.tsbtnMonitoring.Size = new System.Drawing.Size(28, 28);
+            this.tsbtnMonitoring.Text = "tsBtnMonitoring";
+            this.tsbtnMonitoring.Click += new System.EventHandler(this.tsbtnMonitoring_Click);
             // 
             // tcTabControl
             // 
             this.tcTabControl.Controls.Add(this.defaultTabPage);
             this.tcTabControl.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.tcTabControl.Location = new System.Drawing.Point(0, 58);
+            this.tcTabControl.Location = new System.Drawing.Point(0, 64);
             this.tcTabControl.Name = "tcTabControl";
             this.tcTabControl.SelectedIndex = 0;
-            this.tcTabControl.Size = new System.Drawing.Size(1860, 813);
+            this.tcTabControl.Size = new System.Drawing.Size(1860, 807);
             this.tcTabControl.TabIndex = 2;
+            this.tcTabControl.SelectedIndexChanged += new System.EventHandler(this.tcTabControl_SelectedIndexChanged);
+            this.tcTabControl.ControlAdded += new System.Windows.Forms.ControlEventHandler(this.tcTabControl_ControlAdded);
             // 
             // defaultTabPage
             // 
             this.defaultTabPage.Location = new System.Drawing.Point(4, 28);
             this.defaultTabPage.Name = "defaultTabPage";
             this.defaultTabPage.Padding = new System.Windows.Forms.Padding(3);
-            this.defaultTabPage.Size = new System.Drawing.Size(1852, 781);
+            this.defaultTabPage.Size = new System.Drawing.Size(1852, 775);
             this.defaultTabPage.TabIndex = 0;
             this.defaultTabPage.Text = "New Tab";
             this.defaultTabPage.UseVisualStyleBackColor = true;
@@ -169,6 +186,8 @@
             this.Text = "Form1";
             this.menuStripMain.ResumeLayout(false);
             this.menuStripMain.PerformLayout();
+            this.toolStripMain.ResumeLayout(false);
+            this.toolStripMain.PerformLayout();
             this.tcTabControl.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -190,6 +209,7 @@
         private System.Windows.Forms.ToolStrip toolStripMain;
         private System.Windows.Forms.TabControl tcTabControl;
         private System.Windows.Forms.TabPage defaultTabPage;
+        private System.Windows.Forms.ToolStripButton tsbtnMonitoring;
     }
 }
 

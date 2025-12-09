@@ -52,12 +52,18 @@
     <Compile Include="FormMain.Designer.cs">
       <DependentUpon>FormMain.cs</DependentUpon>
     </Compile>
+    <Compile Include="Interface\iFormMainPresenter.cs" />
+    <Compile Include="Interface\iPresenter.cs" />
+    <Compile Include="Interface\iTabTextBoxPresenter.cs" />
+    <Compile Include="Logger\cLogger.cs" />
+    <Compile Include="Model\cModelOfFormMain.cs" />
+    <Compile Include="Model\cModelOfTabTextBox.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="ucTabTextBox.cs">
+    <Compile Include="UserControls\ucTabTextBox.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="ucTabTextBox.Designer.cs">
+    <Compile Include="UserControls\ucTabTextBox.Designer.cs">
       <DependentUpon>ucTabTextBox.cs</DependentUpon>
     </Compile>
     <EmbeddedResource Include="FormMain.resx">
@@ -72,7 +78,7 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <EmbeddedResource Include="ucTabTextBox.resx">
+    <EmbeddedResource Include="UserControls\ucTabTextBox.resx">
       <DependentUpon>ucTabTextBox.cs</DependentUpon>
     </EmbeddedResource>
     <None Include="Properties\Settings.settings">
