@@ -56,7 +56,6 @@
     <Compile Include="Interface\iPresenter.cs" />
     <Compile Include="Interface\iTabTextBoxPresenter.cs" />
     <Compile Include="Logger\cLogger.cs" />
-    <Compile Include="Model\cModelOfFormMain.cs" />
     <Compile Include="Model\cModelOfTabTextBox.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

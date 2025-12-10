@@ -41,13 +41,11 @@
             this.rtbTextBox.Size = new System.Drawing.Size(1894, 990);
             this.rtbTextBox.TabIndex = 0;
             this.rtbTextBox.Text = "";
-            this.rtbTextBox.TextChanged += new System.EventHandler(this.rtbTextBox_TextChanged);
             // 
             // fileSystemWatcher
             // 
             this.fileSystemWatcher.EnableRaisingEvents = true;
             this.fileSystemWatcher.SynchronizingObject = this;
-            this.fileSystemWatcher.Changed += new System.IO.FileSystemEventHandler(this.fileSystemWatcher_Changed);
             // 
             // ucTabTextBox
             // 

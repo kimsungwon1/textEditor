@@ -16,8 +16,6 @@ namespace TextEditer.Model
         bool m_bFileSystemChanged = false;
         bool m_bMonitoring = false;
 
-        int m_nTabIndex;
-
         iFormMainPresenter fmParent = null;
 
         public cModelOfTabTextBox(iTabTextBoxPresenter presenter, int nIndex, iFormMainPresenter parent)
@@ -25,8 +23,7 @@ namespace TextEditer.Model
             try
             {
                 m_TabTextBoxPresenter = presenter;
-
-                m_nTabIndex = nIndex;
+                
                 fmParent = parent;
             }
             catch(Exception exception)

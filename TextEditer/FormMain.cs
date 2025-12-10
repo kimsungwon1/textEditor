@@ -13,20 +13,15 @@ namespace TextEditer
 {
     public partial class FormMain : Form, iFormMainPresenter
     {
-        ucTabTextBox defaultTab = null;
-        Dictionary<string, int> dicOpenedFilesAndIndex;
-
         public FormMain()
         {
             try
             {
                 InitializeComponent();
-
-                dicOpenedFilesAndIndex = new Dictionary<string, int>();
+                EventInitialize();
 
                 ucTabTextBox default_Tab = new ucTabTextBox(0, this);
                 default_Tab.Dock = DockStyle.Fill;
-                defaultTab = default_Tab;
                 defaultTabPage.Controls.Add(default_Tab);
             }
             catch(Exception exception)
@@ -34,9 +29,40 @@ namespace TextEditer
                 cLogger.Instance.AddLog(eLogType.ERROR, exception);
             }
         }
-        public void ClearDefaultTab()
+
+        private void EventInitialize()
         {
-            defaultTab = null;
+            this.tsMenuItemNewFile.Click += new System.EventHandler(this.tsMenuItemNewFile_Click);
+            this.tsMenuItemOpen.Click += new System.EventHandler(this.tsMenuItemOpen_Click);
+            this.tsMenuItemSave.Click += new System.EventHandler(this.tsMenuItemSave_Click);
+            this.tsMenuItemSaveAs.Click += new System.EventHandler(this.tsMenuItemSaveAs_Click);
+            this.tsMenuItemSaveAll.Click += new System.EventHandler(this.tsMenuItemSaveAll_Click);
+            this.tsMenuItemFileNameChange.Click += new System.EventHandler(this.tsMenuItemFileNameChange_Click);
+            this.tsMenuItemClose.Click += new System.EventHandler(this.tsMenuItemClose_Click);
+            this.tsMenuItemCloseAll.Click += new System.EventHandler(this.tsMenuItemCloseAll_Click);
+            this.tsbtnMonitoring.Click += new System.EventHandler(this.tsbtnMonitoring_Click);
+        }
+
+        private bool ContainsFile(string sFileName)
+        {
+            try
+            {
+                foreach (TabPage tpPage in tcTabControl.TabPages)
+                {
+                    ucTabTextBox perTab = tpPage.Controls[0] as ucTabTextBox;
+
+                    if(perTab.sFilePathName == sFileName)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            catch (Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+                return true;
+            }
         }
 
         public void SetBtnMonitoringChecked(bool bChecked)
@@ -78,7 +104,6 @@ namespace TextEditer
             try
             {
                 AddNewTab("New Tab");
-                ClearDefaultTab();
             }
             catch(Exception exception)
             {
@@ -86,33 +111,26 @@ namespace TextEditer
             }
         }
 
-        private void SetAllTabsIndex()
+        private void AddDefaultTab()
         {
-            try
+            if(tcTabControl.TabPages.Count == 0)
             {
-                for (int i = 0; i < tcTabControl.TabPages.Count; i++)
-                {
-                    ucTabTextBox perTab = GetTabByIndex(i);
+                ucTabTextBox default_Tab = new ucTabTextBox(0, this);
+                default_Tab.Dock = DockStyle.Fill;
 
-                    perTab.nTabIndex = i;
-                    dicOpenedFilesAndIndex[perTab.sFilePathName] = i;
+                TabPage newTabPage = new TabPage("New Tab");
+                newTabPage.Controls.Add(default_Tab);
 
-                    dicOpenedFilesAndIndex.Remove(perTab.sFilePathName);
-                }
-            }
-            catch(Exception exception)
-            {
-                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+                tcTabControl.TabPages.Add(newTabPage);
             }
         }
 
-        private void tsMenuItemClose_Click(object sender, EventArgs e)
+        // 탭이 0개 있게 되도 디폴트 탭은 만들어주지 않는다. 그러므로 따로 호출해야 한다.
+        private void CloseSelectedTab()
         {
             try
             {
                 ucTabTextBox currentTab = GetSelectedTab();
-
-                int nCurrentTabIndex = currentTab.nTabIndex;
 
                 if (!currentTab.bSaved)
                 {
@@ -120,7 +138,7 @@ namespace TextEditer
                     switch (messageResult)
                     {
                         case DialogResult.Yes:
-                            SaveTab(currentTab);
+                            currentTab.SaveData();
                             break;
                         case DialogResult.No:
                             break;
@@ -130,22 +148,22 @@ namespace TextEditer
                             return;
                     }
                 }
-                tcTabControl.TabPages.RemoveAt(nCurrentTabIndex);
-                dicOpenedFilesAndIndex.Remove(currentTab.sFilePathName);
-                SetAllTabsIndex();
+                tcTabControl.TabPages.RemoveAt(tcTabControl.SelectedIndex);
+            }
+            catch (Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+            }
+        }
+
+        private void tsMenuItemClose_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                CloseSelectedTab();
 
                 // 반드시 있는 default Tab
-                if (tcTabControl.TabPages.Count == 0)
-                {
-                    ucTabTextBox default_Tab = new ucTabTextBox(0, this);
-                    default_Tab.Dock = DockStyle.Fill;
-                    defaultTab = default_Tab;
-
-                    TabPage newTabPage = new TabPage("New Tab");
-                    newTabPage.Controls.Add(default_Tab);
-
-                    tcTabControl.TabPages.Add(newTabPage);
-                }
+                AddDefaultTab();
             }
             catch(Exception exception)
             {
@@ -157,28 +175,13 @@ namespace TextEditer
         {
             try
             {
-                for (int i = 0; i < tcTabControl.TabPages.Count; i++)
+                while(tcTabControl.TabPages.Count != 0)
                 {
-                    ucTabTextBox perTab = GetTabByIndex(i);
-
-                    if (!perTab.bSaved)
-                    {
-                        DialogResult messageResult = MessageBox.Show($"\"{perTab.sFilePathName}\"에 대한 변경 내용을 저장할까요?", "저장", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-                    }
-
-                    dicOpenedFilesAndIndex.Remove(perTab.sFilePathName);
+                    CloseSelectedTab();
                 }
-                tcTabControl.TabPages.Clear();
 
                 // 반드시 있는 default Tab
-                ucTabTextBox default_Tab = new ucTabTextBox(0, this);
-                default_Tab.Dock = DockStyle.Fill;
-                defaultTab = default_Tab;
-
-                TabPage newTabPage = new TabPage("New Tab");
-                newTabPage.Controls.Add(default_Tab);
-
-                tcTabControl.TabPages.Add(newTabPage);
+                AddDefaultTab();
             }
             catch(Exception exception)
             {
@@ -230,73 +233,27 @@ namespace TextEditer
                 {
                     using (StreamReader reader = new StreamReader(dl.FileName, Encoding.UTF8, true))
                     {
-                        int nTabIndex = 0;
-                        if (dicOpenedFilesAndIndex.ContainsKey(dl.FileName))
+                        if (ContainsFile(dl.FileName))
                         {
                             return;
                         }
 
+                        ucTabTextBox selectedTab = GetSelectedTab();
+
                         string sFileName = Path.GetFileName(dl.FileName);
-                        if (defaultTab == null)
+
+                        // 만약 현재 선택된 탭 뿐이며 그 탭이 세이브 안되고 비어 있으면
+                        if (tcTabControl.TabPages.Count == 1 && !selectedTab.bSaved && string.IsNullOrEmpty(selectedTab.sMainText))
                         {
-                            ucTabTextBox newTabTextBox = AddNewTab(sFileName);
-
-                            newTabTextBox.sMainText = reader.ReadToEnd();
-                            newTabTextBox.sFilePathName = dl.FileName;
-                            newTabTextBox.bSaved = true;
-
-                            nTabIndex = newTabTextBox.nTabIndex;
+                            tcTabControl.SelectedTab.Text = sFileName;
+                            selectedTab.LoadData(dl.FileName, reader.ReadToEnd());
                         }
                         else
                         {
-                            ucTabTextBox tmpDefaultTab = defaultTab;
-                            defaultTab.sMainText = reader.ReadToEnd();
-                            defaultTab = tmpDefaultTab;
-
-                            defaultTab.sFilePathName = dl.FileName;
-                            defaultTab.Text = sFileName;
-                            defaultTab.bSaved = true;
-
-                            nTabIndex = defaultTab.nTabIndex;
-                            tcTabControl.TabPages[nTabIndex].Text = sFileName;
-                            ClearDefaultTab();
+                            ucTabTextBox newTab = AddNewTab(sFileName);
+                            newTab.LoadData(dl.FileName, reader.ReadToEnd());
                         }
-
-                        dicOpenedFilesAndIndex.Add(dl.FileName, nTabIndex);
                     }
-                }
-            }
-            catch(Exception exception)
-            {
-                cLogger.Instance.AddLog(eLogType.ERROR, exception);
-            }
-        }
-
-        private void SaveTab(ucTabTextBox tabToSave)
-        {
-            try
-            {
-                if (tabToSave == null)
-                {
-                    return;
-                }
-
-                DialogResult dlResult = DialogResult.OK;
-                if (string.IsNullOrEmpty(tabToSave.sFilePathName))
-                {
-                    dlResult = SaveAs(tabToSave);
-                }
-
-                if (dlResult != DialogResult.OK)
-                {
-                    return;
-                }
-
-                using (StreamWriter streamWriter = new StreamWriter(tabToSave.sFilePathName, false, Encoding.UTF8))
-                {
-                    streamWriter.Write(tabToSave.sMainText);
-                    ClearDefaultTab();
-                    tabToSave.bSaved = true;
                 }
             }
             catch(Exception exception)
@@ -309,8 +266,9 @@ namespace TextEditer
         {
             try
             {
+                int nTabIndex = tcTabControl.SelectedIndex;
                 ucTabTextBox currentTab = GetSelectedTab();
-                SaveTab(currentTab);
+                currentTab.SaveData();
             }
             catch(Exception exception)
             {
@@ -323,47 +281,12 @@ namespace TextEditer
             try
             {
                 ucTabTextBox currentTab = GetSelectedTab();
-                SaveAs(currentTab);
-                ClearDefaultTab();
+                currentTab.SaveDataAsNewName();
             }
             catch(Exception exception)
             {
                 cLogger.Instance.AddLog(eLogType.ERROR, exception);
             }
-        }
-
-        private DialogResult SaveAs(ucTabTextBox tabToSave)
-        {
-            try
-            {
-                if (tabToSave == null)
-                {
-                    return DialogResult.No;
-                }
-
-                SaveFileDialog dl = new SaveFileDialog();
-                dl.Filter = "txt files (*.txt)|*.txt;*.log|All files (*.*)|*.*";
-                dl.FilterIndex = 1;
-                dl.RestoreDirectory = true;
-                if (dl.ShowDialog() == DialogResult.OK)
-                {
-                    using (StreamWriter streamWriter = new StreamWriter(dl.FileName, false, Encoding.UTF8))
-                    {
-                        streamWriter.Write(tabToSave.sMainText);
-                        tabToSave.sFilePathName = dl.FileName;
-                        tabToSave.bSaved = true;
-                        dicOpenedFilesAndIndex.Add(dl.FileName, tabToSave.nTabIndex);
-
-                        return DialogResult.OK;
-                    }
-                }
-                return DialogResult.No;
-            }
-            catch (Exception exception)
-            {
-                cLogger.Instance.AddLog(eLogType.ERROR, exception);
-            }
-            return DialogResult.None;
         }
 
         private void tsMenuItemSaveAll_Click(object sender, EventArgs e)
@@ -374,28 +297,7 @@ namespace TextEditer
                 {
                     ucTabTextBox perTab = tpPage.Controls[0] as ucTabTextBox;
 
-                    if (perTab == null)
-                    {
-
-                    }
-
-                    DialogResult dlResult = DialogResult.OK;
-                    if (string.IsNullOrEmpty(perTab.sFilePathName))
-                    {
-                        dlResult = SaveAs(perTab);
-                    }
-
-                    if (dlResult != DialogResult.OK)
-                    {
-                        return;
-                    }
-
-                    using (StreamWriter streamWriter = new StreamWriter(perTab.sFilePathName, false, Encoding.UTF8))
-                    {
-                        streamWriter.Write(perTab.sMainText);
-                        ClearDefaultTab();
-                        perTab.bSaved = true;
-                    }
+                    perTab.SaveData();
                 }
             }
             catch (Exception exception)
@@ -419,10 +321,7 @@ namespace TextEditer
 
                     System.IO.File.Move(selectedTab.sFilePathName, sFileName);
 
-                    dicOpenedFilesAndIndex.Remove(selectedTab.sFilePathName);
-                    dicOpenedFilesAndIndex.Add(sFileName, selectedTab.nTabIndex);
-
-                    tcTabControl.TabPages[selectedTab.nTabIndex].Text = Path.GetFileNameWithoutExtension(sFileName);
+                    tcTabControl.TabPages[tcTabControl.SelectedIndex].Text = Path.GetFileNameWithoutExtension(sFileName);
 
                     selectedTab.sFilePathName = sFileName;
                 }
@@ -448,17 +347,22 @@ namespace TextEditer
             }
         }
 
-        private void tcTabControl_SelectedIndexChanged(object sender, EventArgs e)
+        private void tcTabControl_Selected(object sender, TabControlEventArgs e)
         {
             try
             {
-                ucTabTextBox selectedTab = GetSelectedTab();
-                if (selectedTab == null)
+                ucTabTextBox selectedTab;
+                if(e.TabPage == null || e.TabPage.Controls[0] == null)
                 {
+                    tsbtnMonitoring.Checked = false;
                     return;
                 }
 
-                selectedTab.beSelected();
+                selectedTab = e.TabPage.Controls[0] as ucTabTextBox;
+
+                selectedTab.BeSelected();
+                // 모니터링 버튼 checked 설정
+                tsbtnMonitoring.Checked = selectedTab.bMonitoring;
             }
             catch (Exception exception)
             {
@@ -466,19 +370,19 @@ namespace TextEditer
             }
         }
 
-        private void tcTabControl_ControlAdded(object sender, ControlEventArgs e)
+        private void tcTabControl_Deselected(object sender, TabControlEventArgs e)
         {
             try
             {
-                ucTabTextBox selectedTab = GetSelectedTab();
-                if (selectedTab == null)
+                ucTabTextBox deselectedTab = e.TabPage.Controls[0] as ucTabTextBox;
+                if (deselectedTab == null)
                 {
                     return;
                 }
 
-                selectedTab.beSelected();
+                deselectedTab.BeDeselected();
             }
-            catch (Exception exception)
+            catch(Exception exception)
             {
                 cLogger.Instance.AddLog(eLogType.ERROR, exception);
             }

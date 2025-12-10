@@ -13,20 +13,83 @@ namespace TextEditer
 {
     public partial class ucTabTextBox : UserControl, iTabTextBoxPresenter
     {
-        bool m_bSaved = true;
+        bool m_bSaved = false;
         bool m_bFileSystemChanged = false;
         bool m_bMonitoring = false;
-
-        int m_nTabIndex;
 
         FormMain fmParent;
 
         public ucTabTextBox(int nIndex, FormMain parent)
         {
-            InitializeComponent();
+            try
+            {
+                InitializeComponent();
+                EventInitialize();
+                
+                fmParent = parent;
+            }
+            catch(Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+            }
+        }
 
-            m_nTabIndex = nIndex;
-            fmParent = parent;
+        private void EventInitialize()
+        {
+            this.rtbTextBox.TextChanged += new System.EventHandler(this.rtbTextBox_TextChanged);
+            this.fileSystemWatcher.Changed += new System.IO.FileSystemEventHandler(this.fileSystemWatcher_Changed);
+        }
+
+        public void LoadData(string sFilePath, string sFileContent)
+        {
+            sFilePathName = sFilePath;
+            sMainText = sFileContent;
+            bSaved = true;
+        }
+        public void SaveData()
+        {
+            try
+            {
+                if(string.IsNullOrEmpty(sFilePathName))
+                {
+                    SaveDataAsNewName();
+                }
+                else
+                {
+                    using (StreamWriter streamWriter = new StreamWriter(sFilePathName, false, Encoding.UTF8))
+                    {
+                        streamWriter.Write(sMainText);
+                        bSaved = true;
+                    }
+                }
+            }
+            catch(Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+            }
+        }
+        public void SaveDataAsNewName()
+        {
+            try
+            {
+                SaveFileDialog dl = new SaveFileDialog();
+                dl.Filter = "txt files (*.txt)|*.txt;*.log|All files (*.*)|*.*";
+                dl.FilterIndex = 1;
+                dl.RestoreDirectory = true;
+                if (dl.ShowDialog() == DialogResult.OK)
+                {
+                    using (StreamWriter streamWriter = new StreamWriter(dl.FileName, false, Encoding.UTF8))
+                    {
+                        streamWriter.Write(sMainText);
+                        sFilePathName = dl.FileName;
+                        bSaved = true;
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+            }
         }
 
         public bool bSaved
@@ -38,11 +101,6 @@ namespace TextEditer
         {
             get { return m_bMonitoring; }
             set { m_bMonitoring = value; }
-        }
-        public int nTabIndex
-        {
-            get { return m_nTabIndex; }
-            set { m_nTabIndex = value; }
         }
 
         public string sFilePathName
@@ -71,36 +129,56 @@ namespace TextEditer
 
         private void rtbTextBox_TextChanged(object sender, EventArgs e)
         {
-            m_bSaved = false;
-            fmParent.ClearDefaultTab();
+            try
+            {
+                m_bSaved = false;
+            }
+            catch (Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+            }
         }
 
         private void fileChanged_apply()
         {
-            using (StreamReader reader = new StreamReader(sFilePathName, Encoding.UTF8, true))
+            try
             {
-                rtbTextBox.Text = reader.ReadToEnd();
+                using (StreamReader reader = new StreamReader(sFilePathName, Encoding.UTF8, true))
+                {
+                    rtbTextBox.Text = reader.ReadToEnd();
+                }
+            }
+            catch (Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
             }
         }
 
         private void fileChanged_NoMonitoring()
         {
-            DialogResult messageResult = MessageBox.Show($"\"{fileSystemWatcher.Path}\"\n다른 프로그램에서 파일을 변경했습니다.\n다시 읽어들이시겠습니까?", "다시 읽기", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-            switch (messageResult)
+            try
             {
-                case DialogResult.Yes:
-                    fileChanged_apply();
-                    break;
-                case DialogResult.No:
+                DialogResult messageResult = MessageBox.Show($"\"{fileSystemWatcher.Path}\"\n다른 프로그램에서 파일을 변경했습니다.\n다시 읽어들이시겠습니까?", "다시 읽기", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
-                    break;
-                case DialogResult.Cancel:
+                switch (messageResult)
+                {
+                    case DialogResult.Yes:
+                        fileChanged_apply();
+                        break;
+                    case DialogResult.No:
 
-                    break;
-                default:
+                        break;
+                    case DialogResult.Cancel:
 
-                    break;
+                        break;
+                    default:
+
+                        break;
+                }
+            }
+            catch (Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
             }
         }
 
@@ -123,27 +201,46 @@ namespace TextEditer
                     m_bFileSystemChanged = false;
                 }
             }
-            catch
+            catch (Exception exception)
             {
-
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
             }
         }
 
-        public void beSelected()
+        public void BeSelected()
         {
-            if (m_bFileSystemChanged)
+            try
             {
-                if (m_bMonitoring)
+                if (m_bFileSystemChanged)
                 {
-                    fileChanged_apply();
+                    if (m_bMonitoring)
+                    {
+                        fileChanged_apply();
+                    }
+                    else
+                    {
+                        fileChanged_NoMonitoring();
+                    }
+                    m_bFileSystemChanged = false;
                 }
-                else
-                {
-                    fileChanged_NoMonitoring();
-                }
-                m_bFileSystemChanged = false;
+                // fileSystemWatcher.EnableRaisingEvents = true;
             }
-            fmParent.SetBtnMonitoringChecked(m_bMonitoring);
+            catch (Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+            }
+        }
+
+        public void BeDeselected()
+        {
+            try
+            {
+                // fileSystemWatcher.EnableRaisingEvents = false;
+            }
+            catch(Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+            }
         }
     }
 }
