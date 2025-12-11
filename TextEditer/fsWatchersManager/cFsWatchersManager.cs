@@ -10,7 +10,6 @@ namespace TextEditer
     public sealed class cFsWatchersManager
     {
         private static readonly Lazy<cFsWatchersManager> _instance = new Lazy<cFsWatchersManager>(() => new cFsWatchersManager());
-        private Dictionary<string, FileSystemWatcher> m_dicFsWatchersOfDirectory;
 
         private cFsWatchersManager()
         {
@@ -28,11 +27,7 @@ namespace TextEditer
         {
             string sDirectoryName = Path.GetDirectoryName(sFileFullPath);
             string sFileName = Path.GetFileName(sFileFullPath);
-
-            if(m_dicFsWatchersOfDirectory.ContainsKey(sDirectoryName))
-            {
-                // m_dicFsWatchersOfDirectory[sDirectoryName].Filter
-            }
+            
         }
     }
 }

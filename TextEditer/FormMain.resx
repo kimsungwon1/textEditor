@@ -135,4 +135,7 @@
         5E3yv/I3J8xyDByTLU8AAAAASUVORK5CYII=
 </value>
   </data>
+  <metadata name="fileSystemWatcher.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>350, 17</value>
+  </metadata>
 </root>

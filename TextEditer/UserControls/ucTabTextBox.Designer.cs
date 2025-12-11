@@ -29,8 +29,6 @@
         private void InitializeComponent()
         {
             this.rtbTextBox = new System.Windows.Forms.RichTextBox();
-            this.fileSystemWatcher = new System.IO.FileSystemWatcher();
-            ((System.ComponentModel.ISupportInitialize)(this.fileSystemWatcher)).BeginInit();
             this.SuspendLayout();
             // 
             // rtbTextBox
@@ -42,12 +40,6 @@
             this.rtbTextBox.TabIndex = 0;
             this.rtbTextBox.Text = "";
             // 
-            // fileSystemWatcher
-            // 
-            this.fileSystemWatcher.EnableRaisingEvents = true;
-            this.fileSystemWatcher.SynchronizingObject = this;
-            this.fileSystemWatcher.Changed += new System.IO.FileSystemEventHandler(this.fileSystemWatcher_Changed);
-            // 
             // ucTabTextBox
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(10F, 18F);
@@ -55,7 +47,6 @@
             this.Controls.Add(this.rtbTextBox);
             this.Name = "ucTabTextBox";
             this.Size = new System.Drawing.Size(1894, 990);
-            ((System.ComponentModel.ISupportInitialize)(this.fileSystemWatcher)).EndInit();
             this.ResumeLayout(false);
 
         }
@@ -63,6 +54,5 @@
         #endregion
 
         private System.Windows.Forms.RichTextBox rtbTextBox;
-        private System.IO.FileSystemWatcher fileSystemWatcher;
     }
 }

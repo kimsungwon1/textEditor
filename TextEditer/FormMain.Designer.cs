@@ -43,9 +43,11 @@
             this.tsbtnMonitoring = new System.Windows.Forms.ToolStripButton();
             this.tcTabControl = new System.Windows.Forms.TabControl();
             this.defaultTabPage = new System.Windows.Forms.TabPage();
+            this.fileSystemWatcher = new System.IO.FileSystemWatcher();
             this.menuStripMain.SuspendLayout();
             this.toolStripMain.SuspendLayout();
             this.tcTabControl.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.fileSystemWatcher)).BeginInit();
             this.SuspendLayout();
             // 
             // menuStripMain
@@ -152,7 +154,6 @@
             this.tcTabControl.Size = new System.Drawing.Size(1860, 807);
             this.tcTabControl.TabIndex = 2;
             this.tcTabControl.Selected += new System.Windows.Forms.TabControlEventHandler(this.tcTabControl_Selected);
-            this.tcTabControl.Deselected += new System.Windows.Forms.TabControlEventHandler(this.tcTabControl_Deselected);
             // 
             // defaultTabPage
             // 
@@ -163,6 +164,12 @@
             this.defaultTabPage.TabIndex = 0;
             this.defaultTabPage.Text = "New Tab";
             this.defaultTabPage.UseVisualStyleBackColor = true;
+            // 
+            // fileSystemWatcher
+            // 
+            this.fileSystemWatcher.EnableRaisingEvents = true;
+            this.fileSystemWatcher.SynchronizingObject = this;
+            this.fileSystemWatcher.Changed += new System.IO.FileSystemEventHandler(this.fileSystemWatcher_Changed);
             // 
             // FormMain
             // 
@@ -180,6 +187,7 @@
             this.toolStripMain.ResumeLayout(false);
             this.toolStripMain.PerformLayout();
             this.tcTabControl.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.fileSystemWatcher)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -201,6 +209,7 @@
         private System.Windows.Forms.TabControl tcTabControl;
         private System.Windows.Forms.TabPage defaultTabPage;
         private System.Windows.Forms.ToolStripButton tsbtnMonitoring;
+        private System.IO.FileSystemWatcher fileSystemWatcher;
     }
 }
 
