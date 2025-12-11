@@ -13,7 +13,7 @@ namespace TextEditer
 {
     public partial class ucTabTextBox : UserControl, iTabTextBoxPresenter
     {
-        bool m_bSaved = false;
+        bool m_bSaved = true;
         bool m_bMonitoring = false;
         DateTime m_dateTimeLastWrited;
         string m_sFileFullPath;
@@ -37,12 +37,20 @@ namespace TextEditer
             this.rtbTextBox.TextChanged += new System.EventHandler(this.rtbTextBox_TextChanged);
         }
 
-        public void LoadData(string sFilePath, string sFileContent)
+        public void LoadData(string sFilePath)
         {
-            sFileFullPath = sFilePath;
-            sMainText = sFileContent;
-            bSaved = true;
-            m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
+            try
+            {
+                sFileFullPath = sFilePath;
+
+                m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
+                rtbTextBox.LoadFile(sFilePath, RichTextBoxStreamType.PlainText);
+                bSaved = true;
+            }
+            catch(Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+            }
         }
         public void SaveData()
         {
@@ -89,6 +97,13 @@ namespace TextEditer
             catch (Exception exception)
             {
                 cLogger.Instance.AddLog(eLogType.ERROR, exception);
+            }
+        }
+        public void Close(bool bSave)
+        {
+            if (bSave)
+            {
+                SaveData();
             }
         }
 

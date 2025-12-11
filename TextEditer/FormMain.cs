@@ -43,6 +43,39 @@ namespace TextEditer
             this.tsbtnMonitoring.Click += new System.EventHandler(this.tsbtnMonitoring_Click);
         }
 
+        private string GetNewTabName()
+        {
+            int nIndex = 1;
+            string sDefaultName = "New Tab";
+            string sNewTabName = sDefaultName + nIndex.ToString();
+            while(ContainsTabName(sNewTabName))
+            {
+                nIndex++;
+                sNewTabName = sDefaultName + nIndex.ToString();
+            }
+            return sNewTabName;
+        }
+
+        private bool ContainsTabName(string sTabName)
+        {
+            try
+            {
+                foreach (TabPage tpPage in tcTabControl.TabPages)
+                {
+                    if (tpPage.Text == sTabName)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            catch (Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+                return true;
+            }
+        }
+
         private bool ContainsFile(string sFilePath)
         {
             try
@@ -73,7 +106,7 @@ namespace TextEditer
                 ucTabTextBox newTabTextBox = new ucTabTextBox();
                 newTabTextBox.Dock = DockStyle.Fill;
                 TabPage newTabPage = new TabPage();
-                newTabPage.Text = "New Tab";
+                newTabPage.Text = GetNewTabName();
                 newTabPage.Controls.Add(newTabTextBox);
                 tcTabControl.TabPages.Add(newTabPage);
 
@@ -89,14 +122,14 @@ namespace TextEditer
         }
 
         // full Path를 가져온 다음에 이 함수 안에서 fileName으로 나눠서 LoadData를 하도록 한다.
-        private ucTabTextBox AddNewTab(string sFileFullPath, string sFileContent)
+        private ucTabTextBox AddNewTab(string sFileFullPath)
         {
             try
             {
                 ucTabTextBox newTabTextBox = new ucTabTextBox();
                 string sTabName = Path.GetFileName(sFileFullPath);
                 newTabTextBox.Dock = DockStyle.Fill;
-                newTabTextBox.LoadData(sFileFullPath, sFileContent);
+                newTabTextBox.LoadData(sFileFullPath);
 
                 TabPage newTabPage = new TabPage();
                 newTabPage.Text = sTabName;
@@ -128,48 +161,51 @@ namespace TextEditer
 
         private void AddDefaultTab()
         {
-            if(tcTabControl.TabPages.Count == 0)
+            try
             {
-                ucTabTextBox default_Tab = new ucTabTextBox();
-                default_Tab.Dock = DockStyle.Fill;
-
-                TabPage newTabPage = new TabPage("New Tab");
-                newTabPage.Controls.Add(default_Tab);
-
-                tcTabControl.TabPages.Add(newTabPage);
-
-                Text = "New Tab";
+                if (tcTabControl.TabPages.Count == 0)
+                {
+                    AddNewTab();
+                }
+            }
+            catch(Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
             }
         }
 
         // 탭이 0개 있게 되도 디폴트 탭은 만들어주지 않는다. 그러므로 따로 호출해야 한다.
-        private void CloseSelectedTab()
+        private DialogResult CloseSelectedTab()
         {
             try
             {
-                ucTabTextBox currentTab = GetSelectedTab();
-
-                if (!currentTab.bSaved)
+                ucTabTextBox selectedTab = GetSelectedTab();
+                DialogResult messageResult = DialogResult.Yes;
+                if (!selectedTab.bSaved)
                 {
-                    DialogResult messageResult = MessageBox.Show($"\"{currentTab.sFileFullPath}\"에 대한 변경 내용을 저장할까요?", "저장", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                    messageResult = MessageBox.Show($"\"{tcTabControl.SelectedTab.Text}\"에 대한 변경 내용을 저장할까요?", "저장", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
                     switch (messageResult)
                     {
                         case DialogResult.Yes:
-                            currentTab.SaveData();
+                            selectedTab.Close(true);
                             break;
                         case DialogResult.No:
+                            selectedTab.Close(false);
                             break;
                         case DialogResult.Cancel:
-                            return;
+                            return messageResult;
                         default:
-                            return;
+                            return DialogResult.Cancel;
                     }
                 }
                 tcTabControl.TabPages.RemoveAt(tcTabControl.SelectedIndex);
+                return messageResult;
             }
             catch (Exception exception)
             {
                 cLogger.Instance.AddLog(eLogType.ERROR, exception);
+
+                return DialogResult.Cancel;
             }
         }
 
@@ -194,7 +230,11 @@ namespace TextEditer
             {
                 while(tcTabControl.TabPages.Count != 0)
                 {
-                    CloseSelectedTab();
+                    DialogResult result = CloseSelectedTab();
+                    if(result == DialogResult.Cancel)
+                    {
+                        break;
+                    }
                 }
 
                 // 반드시 있는 default Tab
@@ -238,6 +278,21 @@ namespace TextEditer
             return null;
         }
 
+        private bool IsCurrentTab_DefaultOne()
+        {
+            try
+            {
+                ucTabTextBox selectedTab = GetSelectedTab();
+
+                return tcTabControl.TabPages.Count == 1 && selectedTab.bSaved && string.IsNullOrEmpty(selectedTab.sMainText) && string.IsNullOrEmpty(selectedTab.sFileFullPath);
+            }
+            catch (Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+                return true;
+            }
+        }
+
         private void tsMenuItemOpen_Click(object sender, EventArgs e)
         {
             try
@@ -248,7 +303,7 @@ namespace TextEditer
                 dl.RestoreDirectory = true;
                 if (dl.ShowDialog() == DialogResult.OK)
                 {
-                    using (StreamReader reader = new StreamReader(dl.FileName, Encoding.UTF8, true))
+                    using (StreamReader reader = new StreamReader(dl.FileName, Encoding.UTF8))
                     {
                         if (ContainsFile(dl.FileName))
                         {
@@ -259,11 +314,11 @@ namespace TextEditer
 
                         string sFileName = Path.GetFileName(dl.FileName);
 
-                        // 만약 현재 선택된 탭 뿐이며 그 탭이 세이브 안되고 비어 있으면
-                        if (tcTabControl.TabPages.Count == 1 && !selectedTab.bSaved && string.IsNullOrEmpty(selectedTab.sMainText))
+                        // 만약 현재 선택된 탭 뿐이며 그 탭이 세이브 되고 비어 있으면
+                        if (IsCurrentTab_DefaultOne())
                         {
                             tcTabControl.SelectedTab.Text = sFileName;
-                            selectedTab.LoadData(dl.FileName, reader.ReadToEnd());
+                            selectedTab.LoadData(dl.FileName);
 
                             fileSystemWatcher.Path = Path.GetDirectoryName(dl.FileName);
                             fileSystemWatcher.Filter = sFileName;
@@ -272,7 +327,7 @@ namespace TextEditer
                         }
                         else
                         {
-                            ucTabTextBox newTab = AddNewTab(dl.FileName, reader.ReadToEnd());
+                            ucTabTextBox newTab = AddNewTab(dl.FileName);
 
                             this.Text = tcTabControl.TabPages[tcTabControl.TabCount - 1].Text;
                         }
@@ -291,7 +346,11 @@ namespace TextEditer
             {
                 int nTabIndex = tcTabControl.SelectedIndex;
                 ucTabTextBox currentTab = GetSelectedTab();
+                TabPage tabPage = tcTabControl.SelectedTab;
+
                 currentTab.SaveData();
+
+                tabPage.Text = currentTab.sFileName;
             }
             catch(Exception exception)
             {
@@ -304,7 +363,11 @@ namespace TextEditer
             try
             {
                 ucTabTextBox currentTab = GetSelectedTab();
+                TabPage tabPage = tcTabControl.SelectedTab;
+
                 currentTab.SaveDataAsNewName();
+
+                tabPage.Text = currentTab.sFileName;
             }
             catch(Exception exception)
             {
@@ -321,6 +384,8 @@ namespace TextEditer
                     ucTabTextBox perTab = tpPage.Controls[0] as ucTabTextBox;
 
                     perTab.SaveData();
+
+                    tpPage.Text = perTab.sFileName;
                 }
             }
             catch (Exception exception)
@@ -335,6 +400,12 @@ namespace TextEditer
             {
                 ucTabTextBox selectedTab = GetSelectedTab();
                 SaveFileDialog dl = new SaveFileDialog();
+
+                if (string.IsNullOrEmpty(selectedTab.sFileFullPath))
+                {
+                    return;
+                }
+
                 dl.Filter = "txt files (*.txt)|*.txt;*.log|All files (*.*)|*.*";
                 dl.FilterIndex = 1;
                 dl.RestoreDirectory = true;
@@ -362,6 +433,12 @@ namespace TextEditer
             try
             {
                 ucTabTextBox selectedTab = GetSelectedTab();
+
+                if (string.IsNullOrEmpty(selectedTab.sFileFullPath))
+                {
+                    return;
+                }
+
                 tsbtnMonitoring.Checked = !tsbtnMonitoring.Checked;
 
                 selectedTab.bMonitoring = tsbtnMonitoring.Checked;
@@ -391,12 +468,15 @@ namespace TextEditer
                 tsbtnMonitoring.Checked = selectedTab.bMonitoring;
 
                 // DateTime 설정
-                DateTime dTimeLastWrited = File.GetLastWriteTime(selectedTab.sFileFullPath);
+                if (!string.IsNullOrEmpty(selectedTab.sFileFullPath))
+                {
+                    DateTime dTimeLastWrited = File.GetLastWriteTime(selectedTab.sFileFullPath);
 
-                selectedTab.CheckIfFileChanged(dTimeLastWrited);
+                    selectedTab.CheckIfFileChanged(dTimeLastWrited);
 
-                fileSystemWatcher.Path = Path.GetDirectoryName(selectedTab.sFileFullPath);
-                fileSystemWatcher.Filter = selectedTab.sFileName;
+                    fileSystemWatcher.Path = Path.GetDirectoryName(selectedTab.sFileFullPath);
+                    fileSystemWatcher.Filter = selectedTab.sFileName;
+                }
             }
             catch (Exception exception)
             {
@@ -408,6 +488,8 @@ namespace TextEditer
         {
             try
             {
+                fileSystemWatcher.EnableRaisingEvents = false;
+
                 ucTabTextBox selectedTab = GetSelectedTab();
 
                 // DateTime 설정
@@ -418,6 +500,10 @@ namespace TextEditer
             catch(Exception exception)
             {
                 cLogger.Instance.AddLog(eLogType.ERROR, exception);
+            }
+            finally
+            {
+                fileSystemWatcher.EnableRaisingEvents = true;
             }
         }
     }

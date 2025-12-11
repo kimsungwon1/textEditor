@@ -162,7 +162,7 @@
             this.defaultTabPage.Padding = new System.Windows.Forms.Padding(3);
             this.defaultTabPage.Size = new System.Drawing.Size(1852, 775);
             this.defaultTabPage.TabIndex = 0;
-            this.defaultTabPage.Text = "New Tab";
+            this.defaultTabPage.Text = "New Tab1";
             this.defaultTabPage.UseVisualStyleBackColor = true;
             // 
             // fileSystemWatcher
