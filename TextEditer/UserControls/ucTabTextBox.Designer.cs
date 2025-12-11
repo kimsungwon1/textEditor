@@ -28,7 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.rtbTextBox = new System.Windows.Forms.RichTextBox();
+            this.rtbTextBox = new TextEditer.RichTextBoxExtended();
             this.SuspendLayout();
             // 
             // rtbTextBox
@@ -39,6 +39,8 @@
             this.rtbTextBox.Size = new System.Drawing.Size(1894, 990);
             this.rtbTextBox.TabIndex = 0;
             this.rtbTextBox.Text = "";
+            this.rtbTextBox.ScrolledToBottom += new System.EventHandler(this.rtbTextBox_ScrolledToBottom);
+            this.rtbTextBox.Scroll += new System.EventHandler(this.rtbTextBox_Scroll);
             // 
             // ucTabTextBox
             // 
@@ -53,6 +55,6 @@
 
         #endregion
 
-        private System.Windows.Forms.RichTextBox rtbTextBox;
+        private RichTextBoxExtended rtbTextBox;
     }
 }

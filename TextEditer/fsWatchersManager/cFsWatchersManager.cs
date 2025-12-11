@@ -27,7 +27,6 @@ namespace TextEditer
         {
             string sDirectoryName = Path.GetDirectoryName(sFileFullPath);
             string sFileName = Path.GetFileName(sFileFullPath);
-            
         }
     }
 }
