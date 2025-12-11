@@ -44,7 +44,7 @@ namespace TextEditer
                 sFileFullPath = sFilePath;
 
                 m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
-                rtbTextBox.LoadFile(sFilePath, RichTextBoxStreamType.PlainText);
+                rtbTextBox.OpenLargeFile(sFilePath); // LoadFile(sFilePath, RichTextBoxStreamType.PlainText);
                 bSaved = true;
             }
             catch(Exception exception)
@@ -263,29 +263,9 @@ namespace TextEditer
             }
         }
 
-        private void rtbTextBox_Scroll(object sender, EventArgs e)
-        {
-            rtbTextBox.IsAtMaxScroll();
-        }
-
         bool IsMoreBackgroundText()
         {
             return false;
-        }
-
-        private void rtbTextBox_ScrolledToBottom(object sender, EventArgs e)
-        {
-            const int nLineToDeleteAndAdd = 500;
-            if (IsMoreBackgroundText())
-            {
-                // 현재 text에 처음에서 nLineToDelete번째 줄까지 삭제
-                int nAllLineCount = rtbTextBox.Lines.Count();
-                int nStartIndex = rtbTextBox.GetFirstCharIndexFromLine(nLineToDeleteAndAdd);
-                int nTextToDelete = rtbTextBox.TextLength - nStartIndex;
-                rtbTextBox.Text.Remove(0, nStartIndex);
-                
-
-            }
         }
     }
 }
