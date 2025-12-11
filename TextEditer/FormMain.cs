@@ -51,7 +51,7 @@ namespace TextEditer
                 {
                     ucTabTextBox perTab = tpPage.Controls[0] as ucTabTextBox;
 
-                    if(perTab.sFilePathName == sFileName)
+                    if(perTab.sFileFullPath == sFileName)
                     {
                         return true;
                     }
@@ -62,6 +62,28 @@ namespace TextEditer
             {
                 cLogger.Instance.AddLog(eLogType.ERROR, exception);
                 return true;
+            }
+        }
+
+        private ucTabTextBox GetTabOfFile(string sFileName)
+        {
+            try
+            {
+                for(int nIndex = 0; nIndex < tcTabControl.TabPages.Count; nIndex++)
+                {
+                    ucTabTextBox perTab = tcTabControl.TabPages[nIndex].Controls[0] as ucTabTextBox;
+
+                    if(perTab.sFileFullPath == sFileName)
+                    {
+                        return perTab;
+                    }
+                }
+                return null;
+            }
+            catch(Exception exception)
+            {
+                cLogger.Instance.AddLog(eLogType.ERROR, exception);
+                return null;
             }
         }
 
@@ -77,12 +99,15 @@ namespace TextEditer
             }
         }
 
-        private ucTabTextBox AddNewTab(string sTabName)
+        // full Path를 가져온 다음에 이 함수 안에서 fileName으로 나눠서 LoadData를 하도록 하라. 그래야 안에 유저컨트롤 안에 FileName이 들어간다.
+        private ucTabTextBox AddNewTab(string sFileFullPath, string sFileContent)
         {
             try
             {
                 ucTabTextBox newTabTextBox = new ucTabTextBox(tcTabControl.TabPages.Count, this);
+                string sTabName = Path.GetFileName(sFileFullPath);
                 newTabTextBox.Dock = DockStyle.Fill;
+                newTabTextBox.LoadData(sFileFullPath, sFileContent);
                 TabPage newTabPage = new TabPage();
                 newTabPage.Text = sTabName;
                 newTabPage.Controls.Add(newTabTextBox);
@@ -103,7 +128,7 @@ namespace TextEditer
         {
             try
             {
-                AddNewTab("New Tab");
+                AddNewTab("New Tab", "");
             }
             catch(Exception exception)
             {
@@ -122,6 +147,8 @@ namespace TextEditer
                 newTabPage.Controls.Add(default_Tab);
 
                 tcTabControl.TabPages.Add(newTabPage);
+
+                Text = "New Tab";
             }
         }
 
@@ -134,7 +161,7 @@ namespace TextEditer
 
                 if (!currentTab.bSaved)
                 {
-                    DialogResult messageResult = MessageBox.Show($"\"{currentTab.sFilePathName}\"에 대한 변경 내용을 저장할까요?", "저장", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                    DialogResult messageResult = MessageBox.Show($"\"{currentTab.sFileFullPath}\"에 대한 변경 내용을 저장할까요?", "저장", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
                     switch (messageResult)
                     {
                         case DialogResult.Yes:
@@ -247,11 +274,14 @@ namespace TextEditer
                         {
                             tcTabControl.SelectedTab.Text = sFileName;
                             selectedTab.LoadData(dl.FileName, reader.ReadToEnd());
+
+                            this.Text = selectedTab.sFileFullPath;
                         }
                         else
                         {
-                            ucTabTextBox newTab = AddNewTab(sFileName);
-                            newTab.LoadData(dl.FileName, reader.ReadToEnd());
+                            ucTabTextBox newTab = AddNewTab(sFileName, reader.ReadToEnd());
+
+                            this.Text = newTab.sFileFullPath;
                         }
                     }
                 }
@@ -319,11 +349,11 @@ namespace TextEditer
                 {
                     string sFileName = dl.FileName;
 
-                    System.IO.File.Move(selectedTab.sFilePathName, sFileName);
+                    System.IO.File.Move(selectedTab.sFileFullPath, sFileName);
 
                     tcTabControl.TabPages[tcTabControl.SelectedIndex].Text = Path.GetFileNameWithoutExtension(sFileName);
 
-                    selectedTab.sFilePathName = sFileName;
+                    selectedTab.sFileFullPath = sFileName;
                 }
             }
             catch (Exception exception)
@@ -360,9 +390,13 @@ namespace TextEditer
 
                 selectedTab = e.TabPage.Controls[0] as ucTabTextBox;
 
+                this.Text = selectedTab.sFileFullPath;
+
                 selectedTab.BeSelected();
                 // 모니터링 버튼 checked 설정
                 tsbtnMonitoring.Checked = selectedTab.bMonitoring;
+
+                // DateTime lastWriteTime = File.GetLastWriteTime(selectedTab.sFileFullPath);
             }
             catch (Exception exception)
             {

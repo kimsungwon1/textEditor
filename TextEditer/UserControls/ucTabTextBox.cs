@@ -42,7 +42,7 @@ namespace TextEditer
 
         public void LoadData(string sFilePath, string sFileContent)
         {
-            sFilePathName = sFilePath;
+            sFileFullPath = sFilePath;
             sMainText = sFileContent;
             bSaved = true;
         }
@@ -50,13 +50,13 @@ namespace TextEditer
         {
             try
             {
-                if(string.IsNullOrEmpty(sFilePathName))
+                if(string.IsNullOrEmpty(sFileFullPath))
                 {
                     SaveDataAsNewName();
                 }
                 else
                 {
-                    using (StreamWriter streamWriter = new StreamWriter(sFilePathName, false, Encoding.UTF8))
+                    using (StreamWriter streamWriter = new StreamWriter(sFileFullPath, false, Encoding.UTF8))
                     {
                         streamWriter.Write(sMainText);
                         bSaved = true;
@@ -81,7 +81,7 @@ namespace TextEditer
                     using (StreamWriter streamWriter = new StreamWriter(dl.FileName, false, Encoding.UTF8))
                     {
                         streamWriter.Write(sMainText);
-                        sFilePathName = dl.FileName;
+                        sFileFullPath = dl.FileName;
                         bSaved = true;
                     }
                 }
@@ -94,16 +94,39 @@ namespace TextEditer
 
         public bool bSaved
         {
-            get { return m_bSaved; }
-            set { m_bSaved = value; }
+            get
+            {
+                return m_bSaved;
+            }
+            set
+            {
+                m_bSaved = value;
+            }
         }
         public bool bMonitoring
         {
-            get { return m_bMonitoring; }
-            set { m_bMonitoring = value; }
+            get
+            {
+                return m_bMonitoring;
+            }
+            set
+            {
+                m_bMonitoring = value;
+            }
+        }
+        public DateTime dTimeLastChangedTime
+        {
+            get
+            {
+                return dTimeLastChangedTime;
+            }
+            set
+            {
+                dTimeLastChangedTime = value;
+            }
         }
 
-        public string sFilePathName
+        public string sFileFullPath
         {
             get
             {
@@ -115,6 +138,11 @@ namespace TextEditer
                 fileSystemWatcher.Filter = Path.GetFileName(value);
             }
         }
+        // public string sFileName
+        // {
+        //     get
+        // }
+
         public string sMainText
         {
             get
@@ -143,7 +171,7 @@ namespace TextEditer
         {
             try
             {
-                using (StreamReader reader = new StreamReader(sFilePathName, Encoding.UTF8, true))
+                using (StreamReader reader = new StreamReader(sFileFullPath, Encoding.UTF8, true))
                 {
                     rtbTextBox.Text = reader.ReadToEnd();
                 }
