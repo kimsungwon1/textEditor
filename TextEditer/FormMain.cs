@@ -8,10 +8,11 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
+using System.Threading;
 
 namespace TextEditer
 {
-    public partial class FormMain : Form, iFormMainPresenter
+    public partial class FormMain : Form
     {
         public FormMain()
         {
@@ -181,7 +182,7 @@ namespace TextEditer
             {
                 ucTabTextBox selectedTab = GetSelectedTab();
                 DialogResult messageResult = DialogResult.Yes;
-                if (!selectedTab.bSaved)
+                if (selectedTab.nSaved == 0)
                 {
                     messageResult = MessageBox.Show($"\"{tcTabControl.SelectedTab.Text}\"에 대한 변경 내용을 저장할까요?", "저장", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
                     switch (messageResult)
@@ -192,8 +193,6 @@ namespace TextEditer
                         case DialogResult.No:
                             selectedTab.Close(false);
                             break;
-                        case DialogResult.Cancel:
-                            return messageResult;
                         default:
                             return DialogResult.Cancel;
                     }
@@ -284,7 +283,7 @@ namespace TextEditer
             {
                 ucTabTextBox selectedTab = GetSelectedTab();
 
-                return tcTabControl.TabPages.Count == 1 && selectedTab.bSaved && string.IsNullOrEmpty(selectedTab.sMainText) && string.IsNullOrEmpty(selectedTab.sFileFullPath);
+                return tcTabControl.TabPages.Count == 1 && selectedTab.nSaved == 1 && true /* string.IsNullOrEmpty(selectedTab.sMainText) */ && string.IsNullOrEmpty(selectedTab.sFileFullPath);
             }
             catch (Exception exception)
             {
@@ -348,7 +347,7 @@ namespace TextEditer
                 ucTabTextBox currentTab = GetSelectedTab();
                 TabPage tabPage = tcTabControl.SelectedTab;
 
-                currentTab.SaveData();
+                currentTab.SaveData(currentTab.sFileName);
 
                 tabPage.Text = currentTab.sFileName;
             }
@@ -383,7 +382,7 @@ namespace TextEditer
                 {
                     ucTabTextBox perTab = tpPage.Controls[0] as ucTabTextBox;
 
-                    perTab.SaveData();
+                    perTab.SaveData(perTab.sFileName);
 
                     tpPage.Text = perTab.sFileName;
                 }
@@ -441,7 +440,14 @@ namespace TextEditer
 
                 tsbtnMonitoring.Checked = !tsbtnMonitoring.Checked;
 
-                selectedTab.bMonitoring = tsbtnMonitoring.Checked;
+                if (tsbtnMonitoring.Checked)
+                {
+                    selectedTab.nMonitoring = 1;
+                }
+                else
+                {
+                    selectedTab.nMonitoring = 0;
+                }
             }
             catch (Exception exception)
             {
@@ -465,7 +471,7 @@ namespace TextEditer
                 this.Text = e.TabPage.Text;
 
                 // 모니터링 버튼 checked 설정
-                tsbtnMonitoring.Checked = selectedTab.bMonitoring;
+                tsbtnMonitoring.Checked = (selectedTab.nMonitoring == 1);
 
                 // DateTime 설정
                 if (!string.IsNullOrEmpty(selectedTab.sFileFullPath))
@@ -484,9 +490,24 @@ namespace TextEditer
             }
         }
 
+        private int m_nHandling = 0;
+
         private void fileSystemWatcher_Changed(object sender, FileSystemEventArgs e)
         {
-            try
+            if (Interlocked.Exchange(ref m_nHandling, 1) == 1)
+                return;
+            BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    HandleFileChanged(e.FullPath);
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref m_nHandling, 0);
+                }
+            }));
+            /*try
             {
                 fileSystemWatcher.EnableRaisingEvents = false;
 
@@ -504,7 +525,18 @@ namespace TextEditer
             finally
             {
                 fileSystemWatcher.EnableRaisingEvents = true;
-            }
+            }*/
+        }
+        private void HandleFileChanged(string sPath)
+        {
+            ucTabTextBox selectedTab = GetSelectedTab();
+
+            if (selectedTab == null)
+                return;
+
+            DateTime lastWrite = File.GetLastWriteTime(sPath);
+
+            selectedTab.CheckIfFileChanged(lastWrite);
         }
     }
 }

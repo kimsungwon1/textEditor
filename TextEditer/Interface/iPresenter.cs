@@ -8,5 +8,7 @@ namespace TextEditer
 {
     public interface iPresenter
     {
+        void LoadData(string sFilePath);
+        void SaveData(string sFilePath);
     }
 }

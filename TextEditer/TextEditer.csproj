@@ -47,8 +47,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ControlRedefinition\RichTextBoxExtended.cs">
+    <Compile Include="Custom\RichTextBoxExtended.cs">
       <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Custom\TextBuffer.cs" />
+    <Compile Include="Custom\VirtualTextEditer.cs">
+      <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="FormMain.cs">
       <SubType>Form</SubType>
@@ -56,8 +60,6 @@
     <Compile Include="FormMain.Designer.cs">
       <DependentUpon>FormMain.cs</DependentUpon>
     </Compile>
-    <Compile Include="fsWatchersManager\cFsWatchersManager.cs" />
-    <Compile Include="Interface\iFormMainPresenter.cs" />
     <Compile Include="Interface\iPresenter.cs" />
     <Compile Include="Interface\iTabTextBoxPresenter.cs" />
     <Compile Include="Logger\cLogger.cs" />

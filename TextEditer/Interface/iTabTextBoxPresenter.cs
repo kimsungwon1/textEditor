@@ -8,8 +8,6 @@ namespace TextEditer
 {
     public interface iTabTextBoxPresenter : iPresenter
     {
-        void LoadData(string sFilePath);
-        void SaveData();
         void SaveDataAsNewName();
         void Close(bool bSave);
     }

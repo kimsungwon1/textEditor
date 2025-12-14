@@ -8,13 +8,14 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
+using System.Threading;
 
 namespace TextEditer
 {
     public partial class ucTabTextBox : UserControl, iTabTextBoxPresenter
     {
-        bool m_bSaved = true;
-        bool m_bMonitoring = false;
+        int m_nSaved = 1;
+        int m_nMonitoring = 0;
         DateTime m_dateTimeLastWrited;
         string m_sFileFullPath;
         string m_sFileName;
@@ -34,7 +35,7 @@ namespace TextEditer
 
         private void EventInitialize()
         {
-            this.rtbTextBox.TextChanged += new System.EventHandler(this.rtbTextBox_TextChanged);
+            // this.rtbTextBox.TextChanged += new System.EventHandler(this.rtbTextBox_TextChanged);
         }
 
         public void LoadData(string sFilePath)
@@ -44,30 +45,31 @@ namespace TextEditer
                 sFileFullPath = sFilePath;
 
                 m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
-                rtbTextBox.OpenLargeFile(sFilePath); // LoadFile(sFilePath, RichTextBoxStreamType.PlainText);
-                bSaved = true;
+                textEditer.LoadFile(sFilePath);
+                // rtbTextBox.OpenLargeFile(sFilePath); // LoadFile(sFilePath, RichTextBoxStreamType.PlainText);
+                nSaved = 1;
             }
             catch(Exception exception)
             {
                 cLogger.Instance.AddLog(eLogType.ERROR, exception);
             }
         }
-        public void SaveData()
+        public void SaveData(string sFilePath)
         {
             try
             {
-                if(string.IsNullOrEmpty(sFileFullPath))
+                if(string.IsNullOrEmpty(sFilePath))
                 {
                     SaveDataAsNewName();
                 }
                 else
                 {
-                    using (StreamWriter streamWriter = new StreamWriter(sFileFullPath, false, Encoding.UTF8))
+                    /* using (StreamWriter streamWriter = new StreamWriter(sFilePath, false, Encoding.UTF8))
                     {
                         streamWriter.Write(sMainText);
-                        bSaved = true;
-                    }
-                    m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
+                        nSaved = 1;
+                    } */
+                    m_dateTimeLastWrited = File.GetLastWriteTime(sFilePath);
                 }
             }
             catch(Exception exception)
@@ -87,9 +89,9 @@ namespace TextEditer
                 {
                     using (StreamWriter streamWriter = new StreamWriter(dl.FileName, false, Encoding.UTF8))
                     {
-                        streamWriter.Write(sMainText);
+                        // streamWriter.Write(sMainText);
                         sFileFullPath = dl.FileName;
-                        bSaved = true;
+                        nSaved = 1;
                     }
                     m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
                 }
@@ -103,30 +105,30 @@ namespace TextEditer
         {
             if (bSave)
             {
-                SaveData();
+                SaveData(sFileFullPath);
             }
         }
 
-        public bool bSaved
+        public int nSaved
         {
             get
             {
-                return m_bSaved;
+                return m_nSaved;
             }
             set
             {
-                m_bSaved = value;
+                m_nSaved = value;
             }
         }
-        public bool bMonitoring
+        public int nMonitoring
         {
             get
             {
-                return m_bMonitoring;
+                return m_nMonitoring;
             }
             set
             {
-                m_bMonitoring = value;
+                m_nMonitoring = value;
             }
         }
         public DateTime dateTimeLastWrited
@@ -162,23 +164,23 @@ namespace TextEditer
             }
         }
 
-        public string sMainText
-        {
-            get
-            {
-                return rtbTextBox.Text;
-            }
-            set
-            {
-                rtbTextBox.Text = value;
-            }
-        }
+        // public string sMainText
+        // {
+        //     get
+        //     {
+        //         return rtbTextBox.Text;
+        //     }
+        //     set
+        //     {
+        //         rtbTextBox.Text = value;
+        //     }
+        // }
 
         private void rtbTextBox_TextChanged(object sender, EventArgs e)
         {
             try
             {
-                m_bSaved = false;
+                m_nSaved = 0;
             }
             catch (Exception exception)
             {
@@ -190,11 +192,11 @@ namespace TextEditer
         {
             try
             {
-                Stream stream = new FileStream(sFileFullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                using (StreamReader reader = new StreamReader(stream, true))
-                {
-                    rtbTextBox.Text = reader.ReadToEnd();
-                }
+                // Stream stream = new FileStream(sFileFullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                // using (StreamReader reader = new StreamReader(stream, true))
+                // {
+                //     rtbTextBox.Text = reader.ReadToEnd();
+                // }
                 return true;
             }
             catch (Exception exception)
@@ -219,9 +221,6 @@ namespace TextEditer
                     case DialogResult.No:
 
                         break;
-                    case DialogResult.Cancel:
-
-                        break;
                     default:
 
                         break;
@@ -242,7 +241,7 @@ namespace TextEditer
                 bool bFileChangeSuccess = false;
                 if (m_dateTimeLastWrited != dtTimeLastWrited)
                 {
-                    if (m_bMonitoring)
+                    if (Interlocked.CompareExchange(ref m_nMonitoring, 1, 1) == 1)
                     {
                         bFileChangeSuccess = FileChanged_Apply();
                     }

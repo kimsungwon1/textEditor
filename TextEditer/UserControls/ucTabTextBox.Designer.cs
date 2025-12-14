@@ -28,23 +28,22 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.rtbTextBox = new TextEditer.RichTextBoxExtended();
+            this.textEditer = new TextEditer.VirtualTextEditer();
             this.SuspendLayout();
             // 
-            // rtbTextBox
+            // textEditer
             // 
-            this.rtbTextBox.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.rtbTextBox.Location = new System.Drawing.Point(0, 0);
-            this.rtbTextBox.Name = "rtbTextBox";
-            this.rtbTextBox.Size = new System.Drawing.Size(1894, 990);
-            this.rtbTextBox.TabIndex = 0;
-            this.rtbTextBox.Text = "";
+            this.textEditer.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.textEditer.Location = new System.Drawing.Point(0, 0);
+            this.textEditer.Name = "textEditer";
+            this.textEditer.Size = new System.Drawing.Size(1894, 990);
+            this.textEditer.TabIndex = 0;
             // 
             // ucTabTextBox
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(10F, 18F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.Controls.Add(this.rtbTextBox);
+            this.Controls.Add(this.textEditer);
             this.Name = "ucTabTextBox";
             this.Size = new System.Drawing.Size(1894, 990);
             this.ResumeLayout(false);
@@ -53,6 +52,6 @@
 
         #endregion
 
-        private RichTextBoxExtended rtbTextBox;
+        private VirtualTextEditer textEditer;
     }
 }
