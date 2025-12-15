@@ -124,10 +124,16 @@ namespace TextEditer
             byte[] buffer = new byte[1024];
             long dwOffset = start;
 
+            long diffStart = start;
+
             foreach (cPiece piece in m_listPieces)
             {
                 // 만약 벗어나면 넣지 않음
-                if(piece.dwStart < end && piece.dwStart + piece.nLength < start)
+                if(piece.bOriginal && (piece.dwStart + piece.nLength < start || piece.dwStart > end))
+                {
+                    continue;
+                }
+                else if(!piece.bOriginal && diffStart + piece.nLength < start || diffStart > end)
                 {
                     continue;
                 }
@@ -135,8 +141,14 @@ namespace TextEditer
                 {
                     break;
                 }
-
-                int remain = Math.Min(piece.nLength, length);
+                int nPieceLenth = piece.nLength;
+                if (piece.bOriginal)
+                {
+                    diffStart = piece.dwStart + piece.nLength;
+                    nPieceLenth = (int)(piece.dwStart + (long)piece.nLength - start);
+                }
+                
+                int remain = Math.Min(nPieceLenth, length);
 
                 long dwStartOffset = Math.Max(piece.dwStart, start);
 
@@ -149,7 +161,7 @@ namespace TextEditer
                         
                         remain -= toRead;
 
-                        dwOffset += toRead; // off;
+                        dwOffset += toRead;
                     }
                 }
                 else
@@ -167,14 +179,6 @@ namespace TextEditer
                 }
             }
             return Encoding.UTF8.GetString(buffer);
-            // byte[] buffer = new byte[length];
-            // m_memoryMappedViewAccessor.ReadArray(start, buffer, 0, length);
-            // 
-            // 
-            // if (length > 0 && buffer[length - 1] == (byte)'\r')
-            //     length--;
-            // 
-            // return Encoding.UTF8.GetString(buffer, 0, length);
         }
 
         public int GetLineStartByteOffset(int lineIndex)
