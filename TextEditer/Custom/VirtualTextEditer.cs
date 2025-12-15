@@ -156,49 +156,58 @@ namespace TextEditer
 
             bool changed = false;
 
-            switch (e.KeyCode)
+            if(((int)e.KeyCode >= 65 && (int)e.KeyCode <= 90) || ((int)e.KeyCode >= 96 && (int)e.KeyCode <= 106))
             {
-                case Keys.Up:
-                    if (m_cursor.Line > 0) { m_cursor.Line--; changed = true; }
-                    break;
-
-                case Keys.Down:
-                    if (m_cursor.Line + 1 < m_iBuffer.LineCount) { m_cursor.Line++; changed = true; }
-                    break;
-
-                case Keys.Left:
-                    if (m_cursor.Column > 0) { m_cursor.Column--; changed = true; }
-                    break;
-
-                case Keys.Right:
-                    m_cursor.Column++; changed = true;
-                    break;
-
-                case Keys.Home:
-                    m_cursor.Column = 0; changed = true;
-                    break;
-
-                case Keys.End:
-                    m_cursor.Column = m_iBuffer.GetLineLength(m_cursor.Line); changed = true;
-                    break;
-
-                case Keys.PageUp:
-                    {
-                        int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
-                        m_cursor.Line = Math.Max(0, m_cursor.Line - visible);
-                        changed = true;
-                        break;
-                    }
-
-                case Keys.PageDown:
-                    {
-                        int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
-                        m_cursor.Line = Math.Min(m_iBuffer.LineCount - 1, m_cursor.Line + visible);
-                        changed = true;
-                        break;
-                    }
+                Byte[] bytes = new Byte[1];
+                bytes[0] = (Byte)e.KeyValue;
+                m_iBuffer.AddBuffer(bytes, m_iBuffer.GetIndex(m_cursor.Line, m_cursor.Column));
             }
+            else
+            {
+                switch (e.KeyCode)
+                {
+                    case Keys.Up:
+                        if (m_cursor.Line > 0) { m_cursor.Line--; changed = true; }
+                        break;
 
+                    case Keys.Down:
+                        if (m_cursor.Line + 1 < m_iBuffer.LineCount) { m_cursor.Line++; changed = true; }
+                        break;
+
+                    case Keys.Left:
+                        if (m_cursor.Column > 0) { m_cursor.Column--; changed = true; }
+                        break;
+
+                    case Keys.Right:
+                        m_cursor.Column++; changed = true;
+                        break;
+
+                    case Keys.Home:
+                        m_cursor.Column = 0; changed = true;
+                        break;
+
+                    case Keys.End:
+                        m_cursor.Column = m_iBuffer.GetLineLength(m_cursor.Line); changed = true;
+                        break;
+
+                    case Keys.PageUp:
+                        {
+                            int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
+                            m_cursor.Line = Math.Max(0, m_cursor.Line - visible);
+                            changed = true;
+                            break;
+                        }
+
+                    case Keys.PageDown:
+                        {
+                            int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
+                            m_cursor.Line = Math.Min(m_iBuffer.LineCount - 1, m_cursor.Line + visible);
+                            changed = true;
+                            break;
+                        }
+                }
+            }
+            
             if (changed)
             {
                 ClampCursor();

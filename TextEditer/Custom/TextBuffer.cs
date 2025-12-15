@@ -10,12 +10,25 @@ namespace TextEditer
 {
     public class ITextBuffer : IDisposable
     {
+        private FileStream m_fileStream;
         private MemoryMappedFile m_memoryMappedFile;
         private MemoryMappedViewAccessor m_memoryMappedViewAccessor;
-        private readonly List<long> m_listLineOffsets = new List<long>();
+        private readonly List<long> m_listLineOffsets;
+
+        private readonly MemoryStream m_memoryStreamAdd = new MemoryStream(1024 * 1024);
+        private readonly List<cPiece> m_listPieces;
+
         private long m_dwFileLength;
 
+        // private int m_nAddPieceOffset = 0;
+
         public int LineCount => m_listLineOffsets.Count;
+
+        public ITextBuffer()
+        {
+            m_listLineOffsets = new List<long>();
+            m_listPieces = new List<cPiece>();
+        }
 
         public void Load(string path)
         {
@@ -24,9 +37,9 @@ namespace TextEditer
             FileInfo info = new FileInfo(path);
             m_dwFileLength = info.Length;
 
-            FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            m_fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
-            m_memoryMappedFile = MemoryMappedFile.CreateFromFile(fs, null, 0, MemoryMappedFileAccess.Read, HandleInheritability.None, false);
+            m_memoryMappedFile = MemoryMappedFile.CreateFromFile(m_fileStream, null, 0, MemoryMappedFileAccess.Read, HandleInheritability.None, false);
 
             m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(
                 0, 0, MemoryMappedFileAccess.Read);
@@ -34,6 +47,35 @@ namespace TextEditer
             BuildLineIndex();
             if (m_listLineOffsets.Count == 0)
                 m_listLineOffsets.Add(0);
+
+            m_listPieces.Add(new cPiece(true, 0, (int)m_dwFileLength));
+        }
+
+        public void AddBuffer(byte[] arrAdded, int nPosition)
+        {
+            m_memoryStreamAdd.Write(arrAdded, 0, arrAdded.Length);
+            Split(nPosition, arrAdded.Count());
+        }
+
+        public void Split(int nNewAddStartPosition, int nNewAddLength)
+        {
+            int nPieceStart = 0;
+            for(int i = 0; i < m_listPieces.Count; i++)
+            {
+                // 만약 Piece 사이 있으면, Split
+                if(nNewAddStartPosition >= nPieceStart && nNewAddStartPosition < nPieceStart + m_listPieces[i].nLength)
+                {
+                    long dwPos = m_listPieces[i].dwStart;
+                    int nLength = nNewAddStartPosition - nPieceStart;
+                    int nOriginLength = m_listPieces[i].nLength;
+                    m_listPieces[i].nLength = nLength;
+                    m_listPieces.Insert(i, new cPiece(false, dwPos, nNewAddLength));
+                    m_listPieces.Insert(i + i, new cPiece(m_listPieces[i].bOriginal, dwPos + nNewAddLength, nOriginLength - nLength));
+
+                    return;
+                }
+                nPieceStart += m_listPieces[i].nLength;
+            }
         }
 
         private void BuildLineIndex()
@@ -61,29 +103,84 @@ namespace TextEditer
         {
             if (m_memoryMappedViewAccessor == null)
                 return string.Empty;
-
+            
             if (index < 0 || index >= m_listLineOffsets.Count)
                 return string.Empty;
-
+            
             long start = m_listLineOffsets[index];
             long end = (index + 1 < m_listLineOffsets.Count) ? m_listLineOffsets[index + 1] - 1 : m_dwFileLength;
-
+            
             long lenLong = end - start;
             if (lenLong <= 0)
                 return string.Empty;
             
             if (lenLong > int.MaxValue)
                 lenLong = int.MaxValue;
-
-            int length = (int)lenLong;
-
-            byte[] buffer = new byte[length];
-            m_memoryMappedViewAccessor.ReadArray(start, buffer, 0, length);
             
-            if (length > 0 && buffer[length - 1] == (byte)'\r')
-                length--;
+            int length = (int)lenLong;
+            
+            /// - 이 위로부턴 기존 코드 - ///
 
-            return Encoding.UTF8.GetString(buffer, 0, length);
+            byte[] buffer = new byte[1024];
+
+            foreach (cPiece piece in m_listPieces)
+            {
+                // 만약 벗어나면 넣지 않음
+                if(piece.dwStart < end && piece.dwStart + piece.nLength < start)
+                {
+                    continue;
+                }
+                else if(piece.dwStart > end)
+                {
+                    break;
+                }
+
+                int remain = Math.Min(piece.nLength, length);
+
+                long off = (piece.dwStart < start) ? start : piece.dwStart; // piece.dwStart;
+                if (piece.bOriginal)
+                {
+                    while(remain > 0)
+                    {
+                        int toRead = Math.Min(1024, remain);
+                        m_memoryMappedViewAccessor.ReadArray(off, buffer, 0, toRead);
+                        off += toRead;
+                        remain -= toRead;
+                    }
+                }
+                else
+                {
+                    m_memoryStreamAdd.Position = off;
+                    while (remain > 0)
+                    {
+                        int toRead = Math.Min(1024, remain);
+                        m_memoryStreamAdd.Read(buffer, 0, toRead);
+                        off += toRead;
+                        remain -= toRead;
+                    }
+                }
+            }
+            return Encoding.UTF8.GetString(buffer);
+            // byte[] buffer = new byte[length];
+            // m_memoryMappedViewAccessor.ReadArray(start, buffer, 0, length);
+            // 
+            // 
+            // if (length > 0 && buffer[length - 1] == (byte)'\r')
+            //     length--;
+            // 
+            // return Encoding.UTF8.GetString(buffer, 0, length);
+        }
+
+        public int GetIndex(int line, int column)
+        {
+            int lineOffset = (int)m_listLineOffsets[line];
+            return lineOffset + column;
+        }
+
+        public void WriteLine(int lineIndex, int nOffset, byte[] arrNewBuffer)
+        {
+            long start = m_listLineOffsets[lineIndex];
+            m_memoryMappedViewAccessor.WriteArray(start, arrNewBuffer, nOffset, arrNewBuffer.Count());
         }
 
         public int GetLineLength(int index)
