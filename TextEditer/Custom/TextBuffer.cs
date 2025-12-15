@@ -53,8 +53,8 @@ namespace TextEditer
 
         public void AddBuffer(byte[] arrAdded, int nPosition)
         {
-            m_memoryStreamAdd.Write(arrAdded, 0, arrAdded.Length);
             Split(nPosition, arrAdded.Count());
+            m_memoryStreamAdd.Write(arrAdded, 0, arrAdded.Length);
         }
 
         public void Split(int nNewAddStartPosition, int nNewAddLength)
@@ -69,8 +69,8 @@ namespace TextEditer
                     int nLength = nNewAddStartPosition - nPieceStart;
                     int nOriginLength = m_listPieces[i].nLength;
                     m_listPieces[i].nLength = nLength;
-                    m_listPieces.Insert(i, new cPiece(false, dwPos, nNewAddLength));
-                    m_listPieces.Insert(i + i, new cPiece(m_listPieces[i].bOriginal, dwPos + nNewAddLength, nOriginLength - nLength));
+                    m_listPieces.Insert(i + 1, new cPiece(false, m_memoryStreamAdd.Length, nNewAddLength));
+                    m_listPieces.Insert(i + 2, new cPiece(m_listPieces[i].bOriginal, nLength, nOriginLength - nLength));
 
                     return;
                 }
@@ -122,6 +122,7 @@ namespace TextEditer
             /// - 이 위로부턴 기존 코드 - ///
 
             byte[] buffer = new byte[1024];
+            long dwOffset = start;
 
             foreach (cPiece piece in m_listPieces)
             {
@@ -137,26 +138,31 @@ namespace TextEditer
 
                 int remain = Math.Min(piece.nLength, length);
 
-                long off = (piece.dwStart < start) ? start : piece.dwStart; // piece.dwStart;
+                long dwStartOffset = Math.Max(piece.dwStart, start);
+
                 if (piece.bOriginal)
                 {
                     while(remain > 0)
                     {
                         int toRead = Math.Min(1024, remain);
-                        m_memoryMappedViewAccessor.ReadArray(off, buffer, 0, toRead);
-                        off += toRead;
+                        m_memoryMappedViewAccessor.ReadArray(dwStartOffset, buffer, (int)(dwOffset - start), toRead);
+                        
                         remain -= toRead;
+
+                        dwOffset += toRead; // off;
                     }
                 }
                 else
                 {
-                    m_memoryStreamAdd.Position = off;
+                    m_memoryStreamAdd.Position = piece.dwStart;
                     while (remain > 0)
                     {
                         int toRead = Math.Min(1024, remain);
-                        m_memoryStreamAdd.Read(buffer, 0, toRead);
-                        off += toRead;
+                        m_memoryStreamAdd.Read(buffer, (int)(dwOffset - start), toRead);
+                        
                         remain -= toRead;
+
+                        dwOffset += toRead;
                     }
                 }
             }
@@ -171,10 +177,25 @@ namespace TextEditer
             // return Encoding.UTF8.GetString(buffer, 0, length);
         }
 
-        public int GetIndex(int line, int column)
+        public int GetLineStartByteOffset(int lineIndex)
         {
-            int lineOffset = (int)m_listLineOffsets[line];
-            return lineOffset + column;
+            return (int)m_listLineOffsets[lineIndex];
+        }
+
+        public int GetIndex(int lineIndex, int column)
+        {
+            // int lineOffset = (int)m_listLineOffsets[line];
+            // return lineOffset + 4 * column;
+            string line = GetLine(lineIndex);
+
+            if (column <= 0) return GetLineStartByteOffset(lineIndex);
+            if (column >= line.Length)
+                return GetLineStartByteOffset(lineIndex) +
+                       Encoding.UTF8.GetByteCount(line);
+
+            string sub = line.Substring(0, column);
+            return GetLineStartByteOffset(lineIndex) +
+                   Encoding.UTF8.GetByteCount(sub);
         }
 
         public void WriteLine(int lineIndex, int nOffset, byte[] arrNewBuffer)
