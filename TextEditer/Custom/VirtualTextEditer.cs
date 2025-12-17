@@ -399,12 +399,12 @@ namespace TextEditer
             g.Clear(BackColor);
 
             using (SolidBrush textBrush = new SolidBrush(ForeColor))
+            using (StringFormat sf = new StringFormat(StringFormat.GenericTypographic))
             {
+                sf.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
+
                 int firstLine = m_vScroll.Value;
                 int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
-
-                // 스크롤바 영역만큼 우측 여백(가려짐 방지)
-                int rightPadding = m_vScroll.Width;
 
                 for (int i = 0; i < visible; i++)
                 {
@@ -413,14 +413,16 @@ namespace TextEditer
                         break;
 
                     string line = m_iBuffer.GetLineUtf8(lineIndex);
-                    // g.DrawString(line, m_font, textBrush, new PointF(TextPaddingLeft, i * m_nLineHeight), m_stringFormat);
-                    TextRenderer.DrawText(
-                        g,
+
+                    float x = TextPaddingLeft;
+                    float y = i * m_nLineHeight;
+
+                    g.DrawString(
                         line,
                         m_font,
-                        new Point(TextPaddingLeft, i * m_nLineHeight),
-                        ForeColor,
-                        TextFormatFlags.NoPadding | TextFormatFlags.NoClipping
+                        textBrush,
+                        new PointF(x, y),
+                        sf
                     );
                 }
             }
