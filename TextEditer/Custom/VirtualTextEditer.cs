@@ -15,6 +15,7 @@ namespace TextEditer
     {
         public int Line;
         public long ByteOffset;
+        public float PreferredX;
     }
     public class VirtualTextEditer : UserControl
     {
@@ -122,7 +123,6 @@ namespace TextEditer
         {
             base.OnMouseDown(e);
             Focus();
-
             if (m_iBuffer == null || m_vScroll == null)
                 return;
 
@@ -134,14 +134,18 @@ namespace TextEditer
                 line = m_iBuffer.m_nLineCount - 1;
 
             // ⭐ 텍스트 시작 X 보정
-            int textX = e.X - TextPaddingLeft;
-            if (textX < 0) textX = 0;
+            using (Graphics g = CreateGraphics())   // ⭐ 여기
+            {
+                float textX = e.X - TextPaddingLeft;
+                if (textX < 0) textX = 0;
 
-            int col = GetColumnFromX(line, textX);
-            long byteOffset = m_iBuffer.GetIndex(line, col);
+                int col = GetColumnFromX(g, m_iBuffer.GetLineUtf8(line), textX);
+                long byteOffset = m_iBuffer.GetIndex(line, col);
 
-            m_cursor.Line = line;
-            m_cursor.ByteOffset = byteOffset;
+                m_cursor.Line = line;
+                m_cursor.ByteOffset = byteOffset;
+                m_cursor.PreferredX = textX; // ⭐ 여기서 픽셀을 저장
+            }
 
             ClampCursor();
             EnsureCursorVisible();
@@ -423,7 +427,8 @@ namespace TextEditer
         }
         void RenderCaret(Graphics g)
         {
-            if (m_iBuffer == null || m_vScroll == null) return;
+            if (m_iBuffer == null || m_vScroll == null)
+                return;
 
             int firstVisibleLine = m_vScroll.Value;
             int visibleLines = ClientSize.Height / m_nLineHeight;
@@ -432,35 +437,57 @@ namespace TextEditer
             if (caretLineOnScreen < 0 || caretLineOnScreen >= visibleLines)
                 return;
 
-            int column = GetColumn(m_cursor);
-
+            // 1. 현재 줄 텍스트
             string lineText = m_iBuffer.GetLineUtf8(m_cursor.Line);
+
+            // 2. caret column (문자 "뒤" 위치)
+            int column = GetColumn(m_cursor);
             if (column < 0) column = 0;
             if (column > lineText.Length) column = lineText.Length;
 
-            int[] bounds = BuildCaretBoundaries(lineText);
-            int x = TextPaddingLeft + bounds[column];
-            int y = caretLineOnScreen * m_nLineHeight;
+            // 3. prefix 문자열
+            string prefix = (column == 0) ? string.Empty : lineText.Substring(0, column);
 
+            // 4. GDI+ 정확 측정 (⭐ TextRenderer 절대 사용 안 함)
+            float xOffset = 0f;
+            if (prefix.Length > 0)
+            {
+                using (StringFormat sf = new StringFormat(StringFormat.GenericTypographic))
+                {
+                    sf.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
+
+                    SizeF size = g.MeasureString(
+                        prefix,
+                        m_font,
+                        int.MaxValue,
+                        sf
+                    );
+
+                    xOffset = size.Width;
+                }
+            }
+
+            // 5. 최종 caret 위치
+            float x = TextPaddingLeft + xOffset;
+            float y = caretLineOnScreen * m_nLineHeight;
+
+            // 6. caret 그리기
             using (SolidBrush b = new SolidBrush(m_caretColor))
-                g.FillRectangle(b, x, y, 2, m_nLineHeight);
+            {
+                g.FillRectangle(b, x, y, 2f, m_nLineHeight);
+            }
         }
 
-        private int GetColumnFromX(int lineIndex, int x)
+        private int GetColumnFromX(Graphics g, string text, float x)
         {
-            string text = m_iBuffer.GetLineUtf8(lineIndex);
-            if (string.IsNullOrEmpty(text))
-                return 0;
+            var bounds = BuildCaretBoundaries(g, text);
 
-            int[] bounds = BuildCaretBoundaries(text);
-
-            // x가 어느 경계에 가장 가까운지 찾는다
             int best = 0;
-            int bestDist = Math.Abs(x - bounds[0]);
+            float bestDist = Math.Abs(x - bounds[0]);
 
             for (int i = 1; i < bounds.Length; i++)
             {
-                int d = Math.Abs(x - bounds[i]);
+                float d = Math.Abs(x - bounds[i]);
                 if (d < bestDist)
                 {
                     bestDist = d;
@@ -469,36 +496,55 @@ namespace TextEditer
             }
             return best;
         }
-        private int MeasurePrefixWidth(string text, int charCount)
+        private List<RectangleF> MeasureCharBounds(Graphics g, string text)
         {
-            if (charCount <= 0) return 0;
-            if (charCount > text.Length) charCount = text.Length;
+            List<RectangleF> result = new List<RectangleF>(text.Length);
 
-            // prefix substring 폭을 잰다 (TextRenderer 기반)
-            string sub = text.Substring(0, charCount);
-            var sz = TextRenderer.MeasureText(
-                sub, m_font,
-                new Size(int.MaxValue, int.MaxValue),
-                TextFormatFlags.NoPadding | TextFormatFlags.NoClipping
-            );
-            return sz.Width;
+            using (var sf = new StringFormat(StringFormat.GenericTypographic))
+            {
+                sf.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
+
+                const int MAX = 32;
+                float xOffset = 0;
+
+                for (int start = 0; start < text.Length; start += MAX)
+                {
+                    int len = Math.Min(MAX, text.Length - start);
+                    string chunk = text.Substring(start, len);
+
+                    CharacterRange[] ranges = new CharacterRange[len];
+                    for (int i = 0; i < len; i++)
+                        ranges[i] = new CharacterRange(i, 1);
+
+                    sf.SetMeasurableCharacterRanges(ranges);
+
+                    RectangleF layout = new RectangleF(0, 0, 10000, m_nLineHeight);
+                    Region[] regions = g.MeasureCharacterRanges(chunk, m_font, layout, sf);
+
+                    for (int i = 0; i < regions.Length; i++)
+                    {
+                        RectangleF r = regions[i].GetBounds(g);
+                        r.Offset(xOffset, 0);
+                        result.Add(r);
+                    }
+
+                    // 다음 블록 시작 X 보정
+                    var sz = g.MeasureString(chunk, m_font, int.MaxValue, sf);
+                    xOffset += sz.Width;
+                }
+            }
+
+            return result;
         }
-        private int[] BuildCaretBoundaries(string text)
+        private float[] BuildCaretBoundaries(Graphics g, string text)
         {
-            int n = text.Length;
-            int[] bounds = new int[n + 1];
+            var charBounds = MeasureCharBounds(g, text);
+            float[] bounds = new float[text.Length + 1];
 
             bounds[0] = 0;
-            for (int i = 1; i <= n; i++)
-            {
-                string sub = text.Substring(0, i);
-                bounds[i] = TextRenderer.MeasureText(
-                    sub,
-                    m_font,
-                    new Size(int.MaxValue, int.MaxValue),
-                    TextFormatFlags.NoPadding | TextFormatFlags.NoClipping
-                ).Width;
-            }
+            for (int i = 0; i < charBounds.Count; i++)
+                bounds[i + 1] = charBounds[i].Right;
+
             return bounds;
         }
         protected override void Dispose(bool disposing)
