@@ -11,12 +11,6 @@ using System.Windows.Forms;
 
 namespace TextEditer
 {
-    public enum ScrollDirection
-    {
-        None,
-        Up,
-        Down
-    }
     public class RichTextBoxExtended : RichTextBox
     {
         public event EventHandler Scrolled;
