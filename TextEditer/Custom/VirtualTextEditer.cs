@@ -129,8 +129,8 @@ namespace TextEditer
             int line = firstLine + (e.Y / m_nLineHeight);
 
             if (line < 0) line = 0;
-            if (line >= m_iBuffer.LineCount)
-                line = m_iBuffer.LineCount - 1;
+            if (line >= m_iBuffer.m_nLineCount)
+                line = m_iBuffer.m_nLineCount - 1;
 
             // ⭐ 텍스트 시작 X 보정
             int textX = e.X - TextPaddingLeft;
@@ -186,7 +186,7 @@ namespace TextEditer
                     break;
 
                 case Keys.Down:
-                    if (m_cursor.Line + 1 < m_iBuffer.LineCount) { m_cursor.Line++; changed = true; }
+                    if (m_cursor.Line + 1 < m_iBuffer.m_nLineCount) { m_cursor.Line++; changed = true; }
                     break;
 
                 case Keys.Left:
@@ -216,7 +216,7 @@ namespace TextEditer
                 case Keys.PageDown:
                     {
                         int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
-                        m_cursor.Line = Math.Min(m_iBuffer.LineCount - 1, m_cursor.Line + visible);
+                        m_cursor.Line = Math.Min(m_iBuffer.m_nLineCount - 1, m_cursor.Line + visible);
                         changed = true;
                         break;
                     }
@@ -233,7 +233,7 @@ namespace TextEditer
 
         private void ClampCursor()
         {
-            if (m_iBuffer == null || m_iBuffer.LineCount == 0)
+            if (m_iBuffer == null || m_iBuffer.m_nLineCount == 0)
             {
                 m_cursor.Line = 0;
                 m_cursor.ByteOffset = 0;
@@ -243,17 +243,17 @@ namespace TextEditer
             // 1. Line 클램프
             if (m_cursor.Line < 0)
                 m_cursor.Line = 0;
-            else if (m_cursor.Line >= m_iBuffer.LineCount)
-                m_cursor.Line = m_iBuffer.LineCount - 1;
+            else if (m_cursor.Line >= m_iBuffer.m_nLineCount)
+                m_cursor.Line = m_iBuffer.m_nLineCount - 1;
 
             // 2. 해당 줄의 바이트 범위 구하기
             long lineStart = m_iBuffer.GetLineStartByteOffset(m_cursor.Line);
 
             long lineEnd;
-            if (m_cursor.Line + 1 < m_iBuffer.LineCount)
+            if (m_cursor.Line + 1 < m_iBuffer.m_nLineCount)
                 lineEnd = m_iBuffer.GetLineStartByteOffset(m_cursor.Line + 1);
             else
-                lineEnd = m_iBuffer.Length;
+                lineEnd = m_iBuffer.m_nLength;
 
             // CR/LF 중 LF 제외하고 싶으면 여기서 -1 처리 가능
             if (lineEnd < lineStart)
@@ -282,7 +282,7 @@ namespace TextEditer
         {
             long pos = cursor.ByteOffset;
 
-            m_iBuffer.InsertUtf8(pos + 1, text);
+            m_iBuffer.InsertUtf8(cursor.Line, pos + 1, text);
 
             cursor.ByteOffset += Encoding.UTF8.GetByteCount(text);
 
@@ -307,24 +307,24 @@ namespace TextEditer
             byte[] bytes = m_iBuffer.ReadRangeBytes(lineStart, (int)len);
             return Encoding.UTF8.GetCharCount(bytes);
         }
-        void Backspace(ref TextCursor cursor)
+        void Backspace(int nLine, ref TextCursor cursor)
         {
             if (cursor.ByteOffset <= 0)
                 return;
 
             int bytesToDelete = m_iBuffer.GetPreviousCharByteLength(cursor.ByteOffset);
 
-            m_iBuffer.Delete(cursor.ByteOffset - bytesToDelete, bytesToDelete);
+            m_iBuffer.Delete(nLine, cursor.ByteOffset - bytesToDelete, bytesToDelete);
             cursor.ByteOffset -= bytesToDelete;
         }
 
-        public void Delete(ref TextCursor cursor)
+        public void Delete(int nLine, ref TextCursor cursor)
         {
-            if (cursor.ByteOffset >= m_iBuffer.Length)
+            if (cursor.ByteOffset >= m_iBuffer.m_nLength)
                 return;
 
             int bytes = m_iBuffer.GetNextCharByteLength(cursor.ByteOffset);
-            m_iBuffer.Delete(cursor.ByteOffset, bytes);
+            m_iBuffer.Delete(nLine, cursor.ByteOffset, bytes);
         }
         private void UpdateScrollBar()
         {
@@ -332,7 +332,7 @@ namespace TextEditer
                 return;
 
             int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
-            int total = m_iBuffer.LineCount;
+            int total = m_iBuffer.m_nLineCount;
 
             int maxFirstLine = Math.Max(0, total - visible);
 
@@ -383,7 +383,7 @@ namespace TextEditer
                 for (int i = 0; i < visible; i++)
                 {
                     int lineIndex = firstLine + i;
-                    if (lineIndex >= m_iBuffer.LineCount)
+                    if (lineIndex >= m_iBuffer.m_nLineCount)
                         break;
 
                     string line = m_iBuffer.GetLineUtf8(lineIndex);
