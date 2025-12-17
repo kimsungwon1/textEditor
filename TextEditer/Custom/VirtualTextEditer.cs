@@ -35,7 +35,7 @@ namespace TextEditer
         private bool m_bCaretVisible = true;
         private Color m_caretColor = Color.Black; 
 
-        const int TextPaddingLeft = 4;
+        const int TextPaddingLeft = 0;
 
         int firstVisibleLine;
         public VirtualTextEditer()
@@ -167,7 +167,10 @@ namespace TextEditer
         {
             if (!char.IsControl(e.KeyChar))
             {
-                InsertText(ref m_cursor, e.KeyChar.ToString());
+                byte[] byteArrKeyChar = new byte[1];
+                byteArrKeyChar[0] = (byte)e.KeyChar;
+                string sKeyChar = Encoding.UTF8.GetString(byteArrKeyChar);
+                InsertText(ref m_cursor, sKeyChar); 
                 e.Handled = true;
             }
         }
@@ -218,6 +221,16 @@ namespace TextEditer
                         int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
                         m_cursor.Line = Math.Min(m_iBuffer.m_nLineCount - 1, m_cursor.Line + visible);
                         changed = true;
+                        break;
+                    }
+                case Keys.Back:
+                    {
+                        Backspace(m_cursor.Line, ref m_cursor);
+                        break;
+                    }
+                case Keys.Delete:
+                    {
+                        Delete(m_cursor.Line, ref m_cursor);
                         break;
                     }
             }
@@ -281,10 +294,11 @@ namespace TextEditer
         protected void InsertText(ref TextCursor cursor, string text)
         {
             long pos = cursor.ByteOffset;
+            byte[] bytes = Encoding.UTF8.GetBytes(text);
 
-            m_iBuffer.InsertUtf8(cursor.Line, pos + 1, text);
+            m_iBuffer.InsertUtf8(cursor.Line, pos, text);
 
-            cursor.ByteOffset += Encoding.UTF8.GetByteCount(text);
+            cursor.ByteOffset += bytes.Length;// Encoding.UTF8.GetByteCount(text);
 
             cursor.Line += CountNewLines(text);
 

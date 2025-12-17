@@ -106,7 +106,7 @@ namespace TextEditer
             // 이웃 병합
             MergeNeighborsAround(Math.Max(0, startIdx - 1));
 
-            RealignLineOffset(nLine, removeCount);
+            RealignLineOffset(nLine, -removeCount);
             // m_listLineStartOffsets = BuildLineIndex();
         }
 
@@ -137,7 +137,7 @@ namespace TextEditer
                     dwCurrent = dwNext;
                 }
 
-                return Encoding.UTF8.GetString(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
+                return Encoding.UTF8.GetString(memoryStream.ToArray());
             }
         }
 
