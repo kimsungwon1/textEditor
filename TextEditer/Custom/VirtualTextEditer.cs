@@ -19,7 +19,7 @@ namespace TextEditer
     }
     public class VirtualTextEditer : UserControl
     {
-        private ITextBuffer m_iBuffer;
+        private ITextBuffer m_buffer;
         private VScrollBar m_vScroll;
 
         private TextCursor m_cursor;
@@ -71,11 +71,11 @@ namespace TextEditer
         public void LoadFile(string path)
         {
             // 기존 버퍼 정리
-            m_iBuffer?.Dispose();
+            m_buffer?.Dispose();
 
             ITextBuffer textBuffer = new ITextBuffer();
             textBuffer.LoadOriginal(path);
-            m_iBuffer = textBuffer;
+            m_buffer = textBuffer;
 
             m_cursor.Line = 0;
             m_cursor.ByteOffset = 0;
@@ -123,15 +123,15 @@ namespace TextEditer
         {
             base.OnMouseDown(e);
             Focus();
-            if (m_iBuffer == null || m_vScroll == null)
+            if (m_buffer == null || m_vScroll == null)
                 return;
 
             int firstLine = m_vScroll.Value;
             int line = firstLine + (e.Y / m_nLineHeight);
 
             if (line < 0) line = 0;
-            if (line >= m_iBuffer.m_nLineCount)
-                line = m_iBuffer.m_nLineCount - 1;
+            if (line >= m_buffer.m_nLineCount)
+                line = m_buffer.m_nLineCount - 1;
 
             // ⭐ 텍스트 시작 X 보정
             using (Graphics g = CreateGraphics())   // ⭐ 여기
@@ -139,8 +139,8 @@ namespace TextEditer
                 float textX = e.X - TextPaddingLeft;
                 if (textX < 0) textX = 0;
 
-                int col = GetColumnFromX(g, m_iBuffer.GetLineUtf8(line), textX);
-                long byteOffset = m_iBuffer.GetIndex(line, col);
+                int col = GetColumnFromX(g, m_buffer.GetLineUtf8(line), textX);
+                long byteOffset = m_buffer.GetIndex(line, col);
 
                 m_cursor.Line = line;
                 m_cursor.ByteOffset = byteOffset;
@@ -179,35 +179,62 @@ namespace TextEditer
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
-            if (m_iBuffer == null || m_vScroll == null) return;
+            if (m_buffer == null || m_vScroll == null) return;
 
             bool changed = false;
-            
             
             switch (e.KeyCode)
             {
                 case Keys.Up:
-                    if (m_cursor.Line > 0) { m_cursor.Line--; changed = true; }
+                    if (m_cursor.Line > 0)
+                    {
+                        long dwLineOffset = m_cursor.ByteOffset - m_buffer.GetLineStartByteOffset(m_cursor.Line);
+                        long dwLineOffsetAbove = m_buffer.GetLineStartByteOffset(m_cursor.Line) - (m_buffer.GetLineStartByteOffset(m_cursor.Line - 1) + dwLineOffset);
+
+                        if(m_cursor.Line - 1 == 0)
+                        {
+                            dwLineOffset--;
+                            dwLineOffsetAbove -= 2;
+                        }
+
+                        m_cursor.Line--;
+                        m_cursor.ByteOffset -= (dwLineOffset + dwLineOffsetAbove);
+                        changed = true;
+                    }
                     break;
 
                 case Keys.Down:
-                    if (m_cursor.Line + 1 < m_iBuffer.m_nLineCount) { m_cursor.Line++; changed = true; }
+                    if (m_cursor.Line + 1 < m_buffer.m_nLineCount)
+                    {
+                        long dwLineOffsetUnder = Math.Min(m_cursor.ByteOffset - m_buffer.GetLineStartByteOffset(m_cursor.Line), m_buffer.GetLineStartByteOffset(m_cursor.Line + 2) - m_buffer.GetLineStartByteOffset(m_cursor.Line + 1));
+                        long dwLineOffset = m_buffer.GetLineStartByteOffset(m_cursor.Line + 1) - m_cursor.ByteOffset;
+
+                        if(m_cursor.Line == 0)
+                        {
+                            dwLineOffset--;
+                            dwLineOffsetUnder -= 2;
+                        }
+
+                        m_cursor.Line++;
+                        m_cursor.ByteOffset += (dwLineOffset + dwLineOffsetUnder);
+                        changed = true;
+                    }
                     break;
 
                 case Keys.Left:
                     {
-                        int b = m_iBuffer.GetPreviousCharByteLength(m_cursor.ByteOffset);
-                        if (b > 0)
-                            m_cursor.ByteOffset -= b;
+                        int nByte = m_buffer.GetPreviousCharByteLength(m_cursor.ByteOffset);
+                        if (nByte > 0)
+                            m_cursor.ByteOffset -= nByte;
                         changed = true;
                         break;
                     }
 
                 case Keys.Right:
                     {
-                        int b = m_iBuffer.GetNextCharByteLength(m_cursor.ByteOffset);
-                        if (b > 0)
-                            m_cursor.ByteOffset += b;
+                        int nByte = m_buffer.GetNextCharByteLength(m_cursor.ByteOffset);
+                        if (nByte > 0)
+                            m_cursor.ByteOffset += nByte;
                         changed = true;
                         break;
                     }
@@ -217,7 +244,7 @@ namespace TextEditer
                     break;
 
                 case Keys.End:
-                    m_cursor.ByteOffset = m_iBuffer.GetLineLength(m_cursor.Line); changed = true;
+                    m_cursor.ByteOffset = m_buffer.GetLineLength(m_cursor.Line); changed = true;
                     break;
 
                 case Keys.PageUp:
@@ -231,7 +258,7 @@ namespace TextEditer
                 case Keys.PageDown:
                     {
                         int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
-                        m_cursor.Line = Math.Min(m_iBuffer.m_nLineCount - 1, m_cursor.Line + visible);
+                        m_cursor.Line = Math.Min(m_buffer.m_nLineCount - 1, m_cursor.Line + visible);
                         changed = true;
                         break;
                     }
@@ -245,8 +272,12 @@ namespace TextEditer
                         Delete(m_cursor.Line, ref m_cursor);
                         break;
                     }
+                case Keys.Enter:
+                    {
+                        EnterKeyPressed(m_cursor.Line, ref m_cursor);
+                        break;
+                    }
             }
-            
             
             if (changed)
             {
@@ -255,10 +286,29 @@ namespace TextEditer
                 Invalidate();
             }
         }
+        protected override bool IsInputKey(Keys keyData)
+        {
+            switch (keyData & Keys.KeyCode)
+            {
+                case Keys.Left:
+                case Keys.Right:
+                case Keys.Up:
+                case Keys.Down:
+                case Keys.Home:
+                case Keys.End:
+                case Keys.PageUp:
+                case Keys.PageDown:
+                case Keys.Back:
+                case Keys.Delete:
+                case Keys.Enter:
+                    return true;
+            }
 
+            return base.IsInputKey(keyData);
+        }
         private void ClampCursor()
         {
-            if (m_iBuffer == null || m_iBuffer.m_nLineCount == 0)
+            if (m_buffer == null || m_buffer.m_nLineCount == 0)
             {
                 m_cursor.Line = 0;
                 m_cursor.ByteOffset = 0;
@@ -268,17 +318,17 @@ namespace TextEditer
             // 1. Line 클램프
             if (m_cursor.Line < 0)
                 m_cursor.Line = 0;
-            else if (m_cursor.Line >= m_iBuffer.m_nLineCount)
-                m_cursor.Line = m_iBuffer.m_nLineCount - 1;
+            else if (m_cursor.Line >= m_buffer.m_nLineCount)
+                m_cursor.Line = m_buffer.m_nLineCount - 1;
 
             // 2. 해당 줄의 바이트 범위 구하기
-            long lineStart = m_iBuffer.GetLineStartByteOffset(m_cursor.Line);
+            long lineStart = m_buffer.GetLineStartByteOffset(m_cursor.Line);
 
             long lineEnd;
-            if (m_cursor.Line + 1 < m_iBuffer.m_nLineCount)
-                lineEnd = m_iBuffer.GetLineStartByteOffset(m_cursor.Line + 1);
+            if (m_cursor.Line + 1 < m_buffer.m_nLineCount)
+                lineEnd = m_buffer.GetLineStartByteOffset(m_cursor.Line + 1);
             else
-                lineEnd = m_iBuffer.m_nLength;
+                lineEnd = m_buffer.m_nLength;
 
             // CR/LF 중 LF 제외하고 싶으면 여기서 -1 처리 가능
             if (lineEnd < lineStart)
@@ -308,7 +358,7 @@ namespace TextEditer
             long pos = cursor.ByteOffset;
             byte[] bytes = Encoding.UTF8.GetBytes(text);
 
-            m_iBuffer.InsertUtf8(cursor.Line, pos, text);
+            m_buffer.InsertUtf8(cursor.Line, pos, text);
 
             cursor.ByteOffset += bytes.Length;// Encoding.UTF8.GetByteCount(text);
 
@@ -325,12 +375,12 @@ namespace TextEditer
         }
         private int GetColumn(TextCursor cursor)
         {
-            long lineStart = m_iBuffer.GetLineStartByteOffset(cursor.Line);
+            long lineStart = m_buffer.GetLineStartByteOffset(cursor.Line);
             long len = cursor.ByteOffset - lineStart;
 
             if (len <= 0) return 0;
 
-            byte[] bytes = m_iBuffer.ReadRangeBytes(lineStart, (int)len);
+            byte[] bytes = m_buffer.ReadRangeBytes(lineStart, (int)len);
             return Encoding.UTF8.GetCharCount(bytes);
         }
         void Backspace(int nLine, ref TextCursor cursor)
@@ -338,27 +388,64 @@ namespace TextEditer
             if (cursor.ByteOffset <= 0)
                 return;
 
-            int bytesToDelete = m_iBuffer.GetPreviousCharByteLength(cursor.ByteOffset);
+            if (cursor.Line == 0 && cursor.ByteOffset == 0)
+                return;
 
-            m_iBuffer.Delete(nLine, cursor.ByteOffset - bytesToDelete, bytesToDelete);
+            long lineStart = m_buffer.GetLineStartByteOffset(cursor.Line);
+
+            if(cursor.ByteOffset == lineStart)
+            {
+                int newlineBytes = m_buffer.GetPreviousCharByteLength(cursor.ByteOffset);
+
+                m_buffer.Delete(cursor.Line - 1, cursor.ByteOffset - newlineBytes, newlineBytes, true);
+
+                cursor.Line--;
+                cursor.ByteOffset -= newlineBytes;
+
+                return;
+            }
+
+            int bytesToDelete = m_buffer.GetPreviousCharByteLength(cursor.ByteOffset);
+
+            m_buffer.Delete(nLine, cursor.ByteOffset - bytesToDelete, bytesToDelete);
             cursor.ByteOffset -= bytesToDelete;
         }
 
         public void Delete(int nLine, ref TextCursor cursor)
         {
-            if (cursor.ByteOffset >= m_iBuffer.m_nLength)
+            if (cursor.ByteOffset >= m_buffer.m_nLength)
                 return;
 
-            int bytes = m_iBuffer.GetNextCharByteLength(cursor.ByteOffset);
-            m_iBuffer.Delete(nLine, cursor.ByteOffset, bytes);
+            if (m_cursor.Line + 1 >= m_buffer.m_nLineCount)
+                return;
+
+            long nextLineStart = m_buffer.GetLineStartByteOffset(cursor.Line + 1);
+
+            int charBytesToRemove = (int)(nextLineStart - m_cursor.ByteOffset);
+
+            int newLineBytes = GetNewlineByteLength(m_cursor.ByteOffset);
+
+            if (newLineBytes == 2 || newLineBytes == 1)
+            {
+                m_buffer.Delete(nLine, cursor.ByteOffset, charBytesToRemove, true);
+
+                return;
+            }
+
+            int bytes = m_buffer.GetNextCharByteLength(cursor.ByteOffset);
+            m_buffer.Delete(nLine, cursor.ByteOffset, bytes);
+        }
+        public void EnterKeyPressed(int nLine, ref TextCursor cursor)
+        {
+            
         }
         private void UpdateScrollBar()
         {
-            if (m_iBuffer == null || m_vScroll == null)
+            if (m_buffer == null || m_vScroll == null)
                 return;
 
             int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
-            int total = m_iBuffer.m_nLineCount;
+            int total = m_buffer.m_nLineCount;
 
             int maxFirstLine = Math.Max(0, total - visible);
 
@@ -377,7 +464,7 @@ namespace TextEditer
             // 디자이너에서는 안전하게 아무 것도 안 그림
             if (DesignMode) return;
 
-            if (m_iBuffer == null || m_vScroll == null)
+            if (m_buffer == null || m_vScroll == null)
             {
                 e.Graphics.Clear(BackColor);
                 using (SolidBrush b = new SolidBrush(ForeColor))
@@ -393,7 +480,7 @@ namespace TextEditer
 
         private void RenderText(Graphics g)
         {
-            if (m_iBuffer == null || m_vScroll == null)
+            if (m_buffer == null || m_vScroll == null)
                 return;
 
             g.Clear(BackColor);
@@ -409,10 +496,10 @@ namespace TextEditer
                 for (int i = 0; i < visible; i++)
                 {
                     int lineIndex = firstLine + i;
-                    if (lineIndex >= m_iBuffer.m_nLineCount)
+                    if (lineIndex >= m_buffer.m_nLineCount)
                         break;
 
-                    string line = m_iBuffer.GetLineUtf8(lineIndex);
+                    string line = m_buffer.GetLineUtf8(lineIndex);
 
                     float x = TextPaddingLeft;
                     float y = i * m_nLineHeight;
@@ -429,7 +516,7 @@ namespace TextEditer
         }
         void RenderCaret(Graphics g)
         {
-            if (m_iBuffer == null || m_vScroll == null)
+            if (m_buffer == null || m_vScroll == null)
                 return;
 
             int firstVisibleLine = m_vScroll.Value;
@@ -440,7 +527,7 @@ namespace TextEditer
                 return;
 
             // 1. 현재 줄 텍스트
-            string lineText = m_iBuffer.GetLineUtf8(m_cursor.Line);
+            string lineText = m_buffer.GetLineUtf8(m_cursor.Line);
 
             // 2. caret column (문자 "뒤" 위치)
             int column = GetColumn(m_cursor);
@@ -554,11 +641,28 @@ namespace TextEditer
             if (disposing)
             {
                 m_caretTimer?.Stop();
-                m_iBuffer?.Dispose();
+                m_buffer?.Dispose();
                 m_font?.Dispose();
                 m_stringFormat?.Dispose();
             }
             base.Dispose(disposing);
         }
+        private int GetNewlineByteLength(long byteOffset)
+        {
+            if (byteOffset >= m_buffer.m_nLength)
+                return 0;
+            
+            byte[] buf = m_buffer.ReadRangeBytes(byteOffset, 2);
+
+            if (buf.Length >= 2 && buf[0] == (byte)'\r' && buf[1] == (byte)'\n')
+                return 2;
+
+            if (buf.Length >= 1 && buf[0] == (byte)'\n')
+                return 1;
+
+            return 0;
+        }
+
     }
+
 }

@@ -84,7 +84,7 @@ namespace TextEditer
             // m_listLineStartOffsets = BuildLineIndex();
         }
 
-        public void Delete(int nLine, long dwPos, int nByteCount)
+        public void Delete(int nLine, long dwPos, int nByteCount, bool bLinesUpdate = false)
         {
             if (nByteCount <= 0 || m_nLength == 0) return;
             if (dwPos < 0) dwPos = 0;
@@ -106,7 +106,14 @@ namespace TextEditer
             // 이웃 병합
             MergeNeighborsAround(Math.Max(0, startIdx - 1));
 
-            RealignLineOffset(nLine, -removeCount);
+            if (bLinesUpdate)
+            {
+                m_listLineStartOffsets = BuildLineIndex();
+            }
+            else
+            {
+                RealignLineOffset(nLine, -removeCount);
+            }
             // m_listLineStartOffsets = BuildLineIndex();
         }
 
@@ -179,6 +186,12 @@ namespace TextEditer
 
             return m_listLineStartOffsets[line];
         }
+        public long GetLineEndByteOffset(int line)
+        {
+            if (line + 1 < m_nLineCount)
+                return GetLineStartByteOffset(line + 1);
+            return m_nLength;
+        }
         public byte[] ReadRangeBytes(long pos, int byteCount)
         {
             if (byteCount <= 0 || pos < 0 || pos >= m_nLength)
@@ -229,8 +242,7 @@ namespace TextEditer
                 if ((b & 0b1100_0000) == 0b1100_0000)
                     return buf.Length - i;
             }
-
-            // fallback (이론상 거의 안 옴)
+            
             return 1;
         }
 
@@ -261,8 +273,7 @@ namespace TextEditer
             // 11110xxx → 4바이트
             if ((b & 0b1111_1000) == 0b1111_0000)
                 return Math.Min(4, buf.Length);
-
-            // fallback (깨진 UTF-8)
+            
             return 1;
         }
         private void RealignLineOffset(int line, int addedBytes)
