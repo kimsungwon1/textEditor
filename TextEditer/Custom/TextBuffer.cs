@@ -18,9 +18,11 @@ namespace TextEditer
         private long m_dwOriginalLen;
         
         List<long> m_listLineStartOffsets;
+        private cLineDeltaFenwick m_listLineDeltaOffsets;
 
         private readonly MemoryStream m_memoryStream_ofAddPiece = new MemoryStream(1024 * 1024);
         private readonly List<cPiece> m_listPieces = new List<cPiece>(1024);
+        
 
         public long m_nLength { get; private set; }
         public int m_nLineCount => m_listLineStartOffsets.Count;
@@ -133,7 +135,8 @@ namespace TextEditer
             m_nLength += bytes.Length;
             MergeNeighborsAround(pieceIndex);
 
-            // RealignLineOffset(nLine, bytes.Length);
+            m_listLineDeltaOffsets.AddDelta(nLine, bytes.Length);
+            //RealignLineOffset(nLine, bytes.Length);
         }
 
         public void Delete(int nLine, long dwPos, int nByteCount, bool bLinesUpdate = false)
@@ -164,7 +167,7 @@ namespace TextEditer
             }
             else
             {
-                RealignLineOffset(nLine, -removeCount);
+                m_listLineDeltaOffsets.AddDelta(nLine, -removeCount);
             }
         }
 
@@ -235,7 +238,7 @@ namespace TextEditer
             if (line >= m_listLineStartOffsets.Count)
                 return m_nLength;
 
-            return m_listLineStartOffsets[line];
+            return m_listLineStartOffsets[line] + m_listLineDeltaOffsets.QueryExclusive(line);
         }
         public long GetLineEndByteOffset(int line)
         {
@@ -414,6 +417,7 @@ namespace TextEditer
         public void RebuildLineIndex()
         {
             m_listLineStartOffsets = BuildLineIndex();
+            m_listLineDeltaOffsets = new cLineDeltaFenwick(m_listLineStartOffsets.Count);
         }
         private List<long> BuildLineIndex()
         {
