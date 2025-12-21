@@ -29,16 +29,16 @@ namespace TextEditer
         {
             ResetDocument();
 
-            m_fileStream = new FileStream(sPath, FileMode.Open, FileAccess.Read,
+            m_fileStream = new FileStream(sPath, FileMode.Open, FileAccess.ReadWrite,
                 FileShare.ReadWrite | FileShare.Delete);
 
             m_dwOriginalLen = m_fileStream.Length;
 
             m_memoryMappedFile = MemoryMappedFile.CreateFromFile(
-                m_fileStream, null, 0, MemoryMappedFileAccess.Read,
+                m_fileStream, null, m_dwOriginalLen, MemoryMappedFileAccess.ReadWrite,
                 HandleInheritability.None, false);
 
-            m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
+            m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, m_dwOriginalLen);
 
             m_listPieces.Clear();
             m_listPieces.Add(new cPiece(PieceSource.Original, 0, checked((int)m_dwOriginalLen))); // 원본 1조각
@@ -537,7 +537,7 @@ namespace TextEditer
             m_memoryMappedFile?.Dispose(); m_memoryMappedFile = null;
             m_fileStream?.Dispose(); m_fileStream = null;
 
-            m_memoryStream_ofAddPiece.SetLength(0);   // ⭐ Dispose ❌, 초기화만
+            m_memoryStream_ofAddPiece.SetLength(0);
             m_listPieces.Clear();
 
             m_nLength = 0;

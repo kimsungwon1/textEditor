@@ -64,11 +64,6 @@ namespace TextEditer
                 }
                 else
                 {
-                    /* using (StreamWriter streamWriter = new StreamWriter(sFilePath, false, Encoding.UTF8))
-                    {
-                        streamWriter.Write(sMainText);
-                        nSaved = 1;
-                    } */
                     textEditer.Save(sFilePath);
                     m_dateTimeLastWrited = File.GetLastWriteTime(sFilePath);
                 }
@@ -174,18 +169,6 @@ namespace TextEditer
         //         rtbTextBox.Text = value;
         //     }
         // }
-
-        private void rtbTextBox_TextChanged(object sender, EventArgs e)
-        {
-            try
-            {
-                m_nSaved = 0;
-            }
-            catch (Exception exception)
-            {
-                cLogger.Instance.AddLog(eLogType.ERROR, exception);
-            }
-        }
 
         private bool FileChanged_Apply()
         {

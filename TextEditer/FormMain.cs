@@ -302,34 +302,31 @@ namespace TextEditer
                 dl.RestoreDirectory = true;
                 if (dl.ShowDialog() == DialogResult.OK)
                 {
-                    using (StreamReader reader = new StreamReader(dl.FileName, Encoding.UTF8))
+                    if (ContainsFile(dl.FileName))
                     {
-                        if (ContainsFile(dl.FileName))
-                        {
-                            return;
-                        }
+                        return;
+                    }
 
-                        ucTabTextBox selectedTab = GetSelectedTab();
+                    ucTabTextBox selectedTab = GetSelectedTab();
 
-                        string sFileName = Path.GetFileName(dl.FileName);
+                    string sFileName = Path.GetFileName(dl.FileName);
 
-                        // 만약 현재 선택된 탭 뿐이며 그 탭이 세이브 되고 비어 있으면
-                        if (IsCurrentTab_DefaultOne())
-                        {
-                            tcTabControl.SelectedTab.Text = sFileName;
-                            selectedTab.LoadData(dl.FileName);
+                    // 만약 현재 선택된 탭 뿐이며 그 탭이 세이브 되고 비어 있으면
+                    if (IsCurrentTab_DefaultOne())
+                    {
+                        tcTabControl.SelectedTab.Text = sFileName;
+                        selectedTab.LoadData(dl.FileName);
 
-                            fileSystemWatcher.Path = Path.GetDirectoryName(dl.FileName);
-                            fileSystemWatcher.Filter = sFileName;
+                        fileSystemWatcher.Path = Path.GetDirectoryName(dl.FileName);
+                        fileSystemWatcher.Filter = sFileName;
 
-                            this.Text = tcTabControl.TabPages[0].Text;
-                        }
-                        else
-                        {
-                            ucTabTextBox newTab = AddNewTab(dl.FileName);
+                        this.Text = tcTabControl.TabPages[0].Text;
+                    }
+                    else
+                    {
+                        ucTabTextBox newTab = AddNewTab(dl.FileName);
 
-                            this.Text = tcTabControl.TabPages[tcTabControl.TabCount - 1].Text;
-                        }
+                        this.Text = tcTabControl.TabPages[tcTabControl.TabCount - 1].Text;
                     }
                 }
             }
