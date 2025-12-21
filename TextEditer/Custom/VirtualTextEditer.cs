@@ -437,8 +437,9 @@ namespace TextEditer
         }
         public void EnterKeyPressed(int nLine, ref TextCursor cursor)
         {
-            
+            long endoffset = m_buffer.GetLineEndByteOffset(nLine);
         }
+
         private void UpdateScrollBar()
         {
             if (m_buffer == null || m_vScroll == null)
