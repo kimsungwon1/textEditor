@@ -13,9 +13,9 @@ namespace TextEditer
         public long Start;
         public int Length;
 
-        public cPiece(PieceSource bOrigin, long dwStart, int nLen)
+        public cPiece(PieceSource eSource, long dwStart, int nLen)
         {
-            Source = bOrigin;
+            Source = eSource;
             this.Start = dwStart;
             Length = nLen;
         }

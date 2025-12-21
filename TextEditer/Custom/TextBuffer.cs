@@ -24,6 +24,8 @@ namespace TextEditer
 
         public long m_nLength { get; private set; }
         public int m_nLineCount => m_listLineStartOffsets.Count;
+        
+        private string m_snapshotPath;
 
         public void LoadOriginal(string sPath)
         {
@@ -531,6 +533,52 @@ namespace TextEditer
                 else break;
             }
         }
+        private void CreateSnapshotFromBytes(byte[] data)
+        {
+            // 1) 기존 스냅샷 닫기 + 기존 스냅샷 파일 삭제
+            CloseSnapshotHandles();
+            if (!string.IsNullOrEmpty(m_snapshotPath))
+            {
+                File.Delete(m_snapshotPath);
+                m_snapshotPath = null;
+            }
+
+            // 2) 새 스냅샷 파일 생성
+            m_snapshotPath = Path.GetTempFileName();
+            File.WriteAllBytes(m_snapshotPath, data);
+
+            // 3) 스냅샷 파일을 MMF로 매핑 (이건 원본 파일이 아니라 temp라서 안전)
+            m_fileStream = new FileStream(
+                m_snapshotPath,
+                FileMode.Open,
+                FileAccess.ReadWrite,
+                FileShare.ReadWrite | FileShare.Delete
+            );
+
+            m_dwOriginalLen = data.LongLength;
+
+            m_memoryMappedFile = MemoryMappedFile.CreateFromFile(
+                m_fileStream,
+                null,
+                m_dwOriginalLen,
+                MemoryMappedFileAccess.ReadWrite,
+                HandleInheritability.None,
+                false
+            );
+
+            m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, m_dwOriginalLen);
+
+            // 4) PieceTable 초기화: Original 1조각
+            m_listPieces.Clear();
+            m_listPieces.Add(new cPiece(PieceSource.Original, 0, (int)m_dwOriginalLen));
+
+            // 5) AddPiece 비우기
+            m_memoryStream_ofAddPiece.SetLength(0);
+
+            // 6) 라인 인덱스 재구성 + 길이 갱신
+            RebuildLineIndex();
+            m_nLength = m_dwOriginalLen;
+        }
         private void ResetDocument()
         {
             m_memoryMappedViewAccessor?.Dispose(); m_memoryMappedViewAccessor = null;
@@ -541,6 +589,14 @@ namespace TextEditer
             m_listPieces.Clear();
 
             m_nLength = 0;
+        }
+        private void CloseSnapshotHandles()
+        {
+            m_memoryMappedViewAccessor?.Dispose(); m_memoryMappedViewAccessor = null;
+            m_memoryMappedFile?.Dispose(); m_memoryMappedFile = null;
+            m_fileStream?.Dispose(); m_fileStream = null;
+
+            m_dwOriginalLen = 0;
         }
         public void Dispose()
         {
