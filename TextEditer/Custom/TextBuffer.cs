@@ -13,38 +13,93 @@ namespace TextEditer
     public class ITextBuffer : IDisposable
     {
         private FileStream m_fileStream;
-        private MemoryMappedFile m_momoryMappedFile;
+        private MemoryMappedFile m_memoryMappedFile;
         private MemoryMappedViewAccessor m_memoryMappedViewAccessor;
         private long m_dwOriginalLen;
         
         List<long> m_listLineStartOffsets;
+        private cLineDeltaFenwick m_listLineDeltaOffsets;
 
         private readonly MemoryStream m_memoryStream_ofAddPiece = new MemoryStream(1024 * 1024);
         private readonly List<cPiece> m_listPieces = new List<cPiece>(1024);
+        
 
         public long m_nLength { get; private set; }
         public int m_nLineCount => m_listLineStartOffsets.Count;
 
+        private string m_currentPath;
+        private string m_snapshotPath;
+
         public void LoadOriginal(string sPath)
         {
             ResetDocument();
+            m_currentPath = sPath;
 
-            m_fileStream = new FileStream(sPath, FileMode.Open, FileAccess.Read,
-                FileShare.ReadWrite | FileShare.Delete);
+            byte[] data = File.ReadAllBytes(sPath);
 
-            m_dwOriginalLen = m_fileStream.Length;
+            CreateSnapshotFromBytes(data);
+        }
+        private void CreateSnapshotFromBytes(byte[] data)
+        {
+            CloseSnapshotHandles();
+            if (!string.IsNullOrEmpty(m_snapshotPath))
+            {
+                File.Delete(m_snapshotPath);
+                m_snapshotPath = null;
+            }
 
-            m_momoryMappedFile = MemoryMappedFile.CreateFromFile(
-                m_fileStream, null, 0, MemoryMappedFileAccess.Read,
-                HandleInheritability.None, false);
+            m_snapshotPath = Path.GetTempFileName();
+            File.WriteAllBytes(m_snapshotPath, data);
 
-            m_memoryMappedViewAccessor = m_momoryMappedFile.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
+            m_fileStream = new FileStream(
+                m_snapshotPath,
+                FileMode.Open,
+                FileAccess.ReadWrite,
+                FileShare.ReadWrite | FileShare.Delete
+            );
+
+            m_dwOriginalLen = data.LongLength;
+
+            m_memoryMappedFile = MemoryMappedFile.CreateFromFile(
+                m_fileStream,
+                null,
+                m_dwOriginalLen,
+                MemoryMappedFileAccess.ReadWrite,
+                HandleInheritability.None,
+                false
+            );
+
+            m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, m_dwOriginalLen);
 
             m_listPieces.Clear();
-            m_listPieces.Add(new cPiece(PieceSource.Original, 0, checked((int)m_dwOriginalLen))); // 원본 1조각
-            m_nLength = m_dwOriginalLen;
+            m_listPieces.Add(new cPiece(PieceSource.Original, 0, (int)m_dwOriginalLen));
 
-            m_listLineStartOffsets = BuildLineIndex();
+            m_memoryStream_ofAddPiece.SetLength(0);
+
+            RebuildLineIndex();
+            m_nLength = m_dwOriginalLen;
+        }
+        public void Save()
+        {
+            if (string.IsNullOrEmpty(m_currentPath))
+                throw new InvalidOperationException("No current file path.");
+
+            byte[] data = BuildFullText();
+
+            string tmp = m_currentPath + ".tmp";
+            File.WriteAllBytes(tmp, data);
+
+            if (File.Exists(m_currentPath))
+                File.Replace(tmp, m_currentPath, null);
+            else
+                File.Move(tmp, m_currentPath);
+
+            CreateSnapshotFromBytes(data);
+        }
+        public void SaveAs(string newPath)
+        {
+            m_currentPath = newPath;
+            Save();
         }
 
         public void InsertUtf8(int nLine, long dwPos, string sText)
@@ -80,8 +135,8 @@ namespace TextEditer
             m_nLength += bytes.Length;
             MergeNeighborsAround(pieceIndex);
 
-            RealignLineOffset(nLine, bytes.Length);
-            // m_listLineStartOffsets = BuildLineIndex();
+            m_listLineDeltaOffsets.AddDelta(nLine, bytes.Length);
+            //RealignLineOffset(nLine, bytes.Length);
         }
 
         public void Delete(int nLine, long dwPos, int nByteCount, bool bLinesUpdate = false)
@@ -112,9 +167,8 @@ namespace TextEditer
             }
             else
             {
-                RealignLineOffset(nLine, -removeCount);
+                m_listLineDeltaOffsets.AddDelta(nLine, -removeCount);
             }
-            // m_listLineStartOffsets = BuildLineIndex();
         }
 
         public string ReadRangeUtf8(long dwPos, int nByteCount)
@@ -184,7 +238,7 @@ namespace TextEditer
             if (line >= m_listLineStartOffsets.Count)
                 return m_nLength;
 
-            return m_listLineStartOffsets[line];
+            return m_listLineStartOffsets[line] + m_listLineDeltaOffsets.QueryExclusive(line);
         }
         public long GetLineEndByteOffset(int line)
         {
@@ -276,14 +330,95 @@ namespace TextEditer
             
             return 1;
         }
-        private void RealignLineOffset(int line, int addedBytes)
+        public byte[] BuildFullText()
         {
-            for(int i = line + 1; i < m_listLineStartOffsets.Count; i++)
+            using (MemoryStream ms = new MemoryStream())
             {
-                m_listLineStartOffsets[i] += addedBytes;
+                foreach (var piece in m_listPieces)
+                {
+                    if (piece.Length <= 0)
+                        continue;
+
+                    if (piece.Source == PieceSource.Original)
+                    {
+                        byte[] buffer = new byte[piece.Length];
+                        m_memoryMappedViewAccessor.ReadArray(
+                            piece.Start,
+                            buffer,
+                            0,
+                            piece.Length
+                        );
+
+                        ms.Write(buffer, 0, buffer.Length);
+                    }
+                    else
+                    {
+                        m_memoryStream_ofAddPiece.Position = piece.Start;
+
+                        byte[] buffer = new byte[piece.Length];
+                        m_memoryStream_ofAddPiece.Read(buffer, 0, buffer.Length);
+
+                        ms.Write(buffer, 0, buffer.Length);
+                    }
+                }
+
+                return ms.ToArray();
             }
         }
+        
+        public void Reset()
+        {
+            m_memoryMappedViewAccessor?.Dispose();
+            m_memoryMappedFile?.Dispose();
+            m_fileStream?.Dispose();
 
+            m_memoryMappedViewAccessor = null;
+            m_memoryMappedFile = null;
+            m_fileStream = null;
+        }
+
+        public void ResetWithNewContent(string sPath, byte[] fullText)
+        {
+            m_memoryMappedViewAccessor?.Dispose();
+            m_memoryMappedFile?.Dispose();
+            m_fileStream?.Dispose();
+
+            m_fileStream = new FileStream(
+                sPath,
+                FileMode.Create,
+                FileAccess.ReadWrite,
+                FileShare.ReadWrite
+            );
+
+            m_fileStream.Write(fullText, 0, fullText.Length);
+            m_fileStream.Flush();
+
+            m_dwOriginalLen = fullText.Length;
+
+            m_memoryMappedFile = MemoryMappedFile.CreateFromFile(
+                m_fileStream,
+                null,
+                m_dwOriginalLen,
+                MemoryMappedFileAccess.ReadWrite,
+                HandleInheritability.None,
+                false
+            );
+
+            m_memoryMappedViewAccessor =
+                m_memoryMappedFile.CreateViewAccessor(0, m_dwOriginalLen);
+
+            m_memoryStream_ofAddPiece.SetLength(0);
+
+            m_listPieces.Clear();
+            m_listPieces.Add(new cPiece(PieceSource.Original, 0, (int)m_dwOriginalLen));
+
+            BuildLineIndex();
+        }
+        public void RebuildLineIndex()
+        {
+            m_listLineStartOffsets = BuildLineIndex();
+            m_listLineDeltaOffsets = new cLineDeltaFenwick(m_listLineStartOffsets.Count);
+        }
         private List<long> BuildLineIndex()
         {
             List<long> list = new List<long>(1024);
@@ -291,7 +426,7 @@ namespace TextEditer
 
             long docOffset = 0;
 
-            foreach (var piece in m_listPieces)
+            foreach (cPiece piece in m_listPieces)
             {
                 if (piece.Source == PieceSource.Original)
                 {
@@ -339,6 +474,13 @@ namespace TextEditer
             }
 
             return list;
+        }
+        private void RealignLineOffset(int line, int addedBytes)
+        {
+            for(int i = line + 1; i < m_listLineStartOffsets.Count; i++)
+            {
+                m_listLineStartOffsets[i] += addedBytes;
+            }
         }
         private void FindPieceAt(long pos, out int pieceIndex, out int innerOffset)
         {
@@ -394,7 +536,8 @@ namespace TextEditer
 
             if (p.Source == PieceSource.Original)
             {
-                if (m_memoryMappedViewAccessor == null) throw new InvalidOperationException("Original accessor is null.");
+                if (m_memoryMappedViewAccessor == null)
+                    return;
                 byte[] buf = new byte[take];
                 m_memoryMappedViewAccessor.ReadArray(p.Start + skip, buf, 0, take);
                 dst.Write(buf, 0, take);
@@ -446,18 +589,26 @@ namespace TextEditer
         private void ResetDocument()
         {
             m_memoryMappedViewAccessor?.Dispose(); m_memoryMappedViewAccessor = null;
-            m_momoryMappedFile?.Dispose(); m_momoryMappedFile = null;
+            m_memoryMappedFile?.Dispose(); m_memoryMappedFile = null;
             m_fileStream?.Dispose(); m_fileStream = null;
 
-            m_memoryStream_ofAddPiece.SetLength(0);   // ⭐ Dispose ❌, 초기화만
+            m_memoryStream_ofAddPiece.SetLength(0);
             m_listPieces.Clear();
 
             m_nLength = 0;
         }
+        private void CloseSnapshotHandles()
+        {
+            m_memoryMappedViewAccessor?.Dispose(); m_memoryMappedViewAccessor = null;
+            m_memoryMappedFile?.Dispose(); m_memoryMappedFile = null;
+            m_fileStream?.Dispose(); m_fileStream = null;
+
+            m_dwOriginalLen = 0;
+        }
         public void Dispose()
         {
             m_memoryMappedViewAccessor?.Dispose(); m_memoryMappedViewAccessor = null;
-            m_momoryMappedFile?.Dispose(); m_momoryMappedFile = null;
+            m_memoryMappedFile?.Dispose(); m_memoryMappedFile = null;
             m_fileStream?.Dispose(); m_fileStream = null;
 
             m_memoryStream_ofAddPiece?.Dispose();

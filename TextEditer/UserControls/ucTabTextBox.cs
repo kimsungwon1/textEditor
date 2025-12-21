@@ -64,11 +64,7 @@ namespace TextEditer
                 }
                 else
                 {
-                    /* using (StreamWriter streamWriter = new StreamWriter(sFilePath, false, Encoding.UTF8))
-                    {
-                        streamWriter.Write(sMainText);
-                        nSaved = 1;
-                    } */
+                    textEditer.Save();
                     m_dateTimeLastWrited = File.GetLastWriteTime(sFilePath);
                 }
             }
@@ -87,12 +83,10 @@ namespace TextEditer
                 dl.RestoreDirectory = true;
                 if (dl.ShowDialog() == DialogResult.OK)
                 {
-                    using (StreamWriter streamWriter = new StreamWriter(dl.FileName, false, Encoding.UTF8))
-                    {
-                        // streamWriter.Write(sMainText);
-                        sFileFullPath = dl.FileName;
-                        nSaved = 1;
-                    }
+                    sFileFullPath = dl.FileName;
+                    nSaved = 1;
+                    textEditer.SaveAs(dl.FileName);
+                    
                     m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
                 }
             }
@@ -175,18 +169,6 @@ namespace TextEditer
         //         rtbTextBox.Text = value;
         //     }
         // }
-
-        private void rtbTextBox_TextChanged(object sender, EventArgs e)
-        {
-            try
-            {
-                m_nSaved = 0;
-            }
-            catch (Exception exception)
-            {
-                cLogger.Instance.AddLog(eLogType.ERROR, exception);
-            }
-        }
 
         private bool FileChanged_Apply()
         {

@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace TextEditer
 {
@@ -90,6 +90,16 @@ namespace TextEditer
             Invalidate();
         }
 
+        public void SaveAs(string sPath)
+        {
+            m_buffer.SaveAs(sPath);
+        }
+
+        public void Save()
+        {
+            m_buffer.Save();
+        }
+
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
@@ -133,8 +143,7 @@ namespace TextEditer
             if (line >= m_buffer.m_nLineCount)
                 line = m_buffer.m_nLineCount - 1;
 
-            // ⭐ 텍스트 시작 X 보정
-            using (Graphics g = CreateGraphics())   // ⭐ 여기
+            using (Graphics g = CreateGraphics())
             {
                 float textX = e.X - TextPaddingLeft;
                 if (textX < 0) textX = 0;
@@ -144,7 +153,7 @@ namespace TextEditer
 
                 m_cursor.Line = line;
                 m_cursor.ByteOffset = byteOffset;
-                m_cursor.PreferredX = textX; // ⭐ 여기서 픽셀을 저장
+                m_cursor.PreferredX = textX;
             }
 
             ClampCursor();
@@ -223,18 +232,42 @@ namespace TextEditer
 
                 case Keys.Left:
                     {
-                        int nByte = m_buffer.GetPreviousCharByteLength(m_cursor.ByteOffset);
-                        if (nByte > 0)
-                            m_cursor.ByteOffset -= nByte;
+                        long lineStart = m_buffer.GetLineStartByteOffset(m_cursor.Line);
+
+                        if (m_cursor.ByteOffset > lineStart)
+                        {
+                            int nByte = m_buffer.GetPreviousCharByteLength(m_cursor.ByteOffset);
+                            if (nByte > 0)
+                                m_cursor.ByteOffset -= nByte;
+                        }
+                        else if (m_cursor.Line > 0)
+                        {
+                            m_cursor.Line--;
+                            m_cursor.ByteOffset =
+                                m_buffer.GetLineEndByteOffset(m_cursor.Line);
+                        }
+
                         changed = true;
                         break;
                     }
 
                 case Keys.Right:
                     {
-                        int nByte = m_buffer.GetNextCharByteLength(m_cursor.ByteOffset);
-                        if (nByte > 0)
-                            m_cursor.ByteOffset += nByte;
+                        long lineEnd = m_buffer.GetLineEndByteOffset(m_cursor.Line);
+
+                        if (m_cursor.ByteOffset < lineEnd)
+                        {
+                            int nByte = m_buffer.GetNextCharByteLength(m_cursor.ByteOffset);
+                            if (nByte > 0)
+                                m_cursor.ByteOffset += nByte;
+                        }
+                        else if (m_cursor.Line + 1 < m_buffer.m_nLineCount)
+                        {
+                            m_cursor.Line++;
+                            m_cursor.ByteOffset =
+                                m_buffer.GetLineStartByteOffset(m_cursor.Line);
+                        }
+
                         changed = true;
                         break;
                     }
@@ -315,13 +348,11 @@ namespace TextEditer
                 return;
             }
 
-            // 1. Line 클램프
             if (m_cursor.Line < 0)
                 m_cursor.Line = 0;
             else if (m_cursor.Line >= m_buffer.m_nLineCount)
                 m_cursor.Line = m_buffer.m_nLineCount - 1;
 
-            // 2. 해당 줄의 바이트 범위 구하기
             long lineStart = m_buffer.GetLineStartByteOffset(m_cursor.Line);
 
             long lineEnd;
@@ -330,11 +361,9 @@ namespace TextEditer
             else
                 lineEnd = m_buffer.m_nLength;
 
-            // CR/LF 중 LF 제외하고 싶으면 여기서 -1 처리 가능
             if (lineEnd < lineStart)
                 lineEnd = lineStart;
 
-            // 3. ByteOffset 클램프 (⭐ 핵심)
             if (m_cursor.ByteOffset < lineStart)
                 m_cursor.ByteOffset = lineStart;
             else if (m_cursor.ByteOffset > lineEnd)
@@ -437,7 +466,15 @@ namespace TextEditer
         }
         public void EnterKeyPressed(int nLine, ref TextCursor cursor)
         {
-            long endoffset = m_buffer.GetLineEndByteOffset(nLine);
+            const string sNewLine = "\r\n";
+
+            m_buffer.InsertUtf8(cursor.Line, cursor.ByteOffset, sNewLine);
+
+            m_buffer.RebuildLineIndex();
+
+            cursor.Line++;
+
+            cursor.ByteOffset = m_buffer.GetLineStartByteOffset(cursor.Line);
         }
 
         private void UpdateScrollBar()
@@ -501,6 +538,8 @@ namespace TextEditer
                         break;
 
                     string line = m_buffer.GetLineUtf8(lineIndex);
+                    
+                    // line = line.TrimEnd('\r', '\n');
 
                     float x = TextPaddingLeft;
                     float y = i * m_nLineHeight;
