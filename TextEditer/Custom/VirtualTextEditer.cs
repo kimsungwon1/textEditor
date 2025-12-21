@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace TextEditer
 {
@@ -88,6 +88,17 @@ namespace TextEditer
 
             UpdateScrollBar();
             Invalidate();
+        }
+
+        public void Save(string path)
+        {
+            byte[] data = m_buffer.BuildFullText();
+
+            m_buffer.Reset();
+
+            File.WriteAllBytes(path, data);
+
+            m_buffer.ResetWithNewContent(path, data);
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -223,18 +234,42 @@ namespace TextEditer
 
                 case Keys.Left:
                     {
-                        int nByte = m_buffer.GetPreviousCharByteLength(m_cursor.ByteOffset);
-                        if (nByte > 0)
-                            m_cursor.ByteOffset -= nByte;
+                        long lineStart = m_buffer.GetLineStartByteOffset(m_cursor.Line);
+
+                        if (m_cursor.ByteOffset > lineStart)
+                        {
+                            int nByte = m_buffer.GetPreviousCharByteLength(m_cursor.ByteOffset);
+                            if (nByte > 0)
+                                m_cursor.ByteOffset -= nByte;
+                        }
+                        else if (m_cursor.Line > 0)
+                        {
+                            m_cursor.Line--;
+                            m_cursor.ByteOffset =
+                                m_buffer.GetLineEndByteOffset(m_cursor.Line);
+                        }
+
                         changed = true;
                         break;
                     }
 
                 case Keys.Right:
                     {
-                        int nByte = m_buffer.GetNextCharByteLength(m_cursor.ByteOffset);
-                        if (nByte > 0)
-                            m_cursor.ByteOffset += nByte;
+                        long lineEnd = m_buffer.GetLineEndByteOffset(m_cursor.Line);
+
+                        if (m_cursor.ByteOffset < lineEnd)
+                        {
+                            int nByte = m_buffer.GetNextCharByteLength(m_cursor.ByteOffset);
+                            if (nByte > 0)
+                                m_cursor.ByteOffset += nByte;
+                        }
+                        else if (m_cursor.Line + 1 < m_buffer.m_nLineCount)
+                        {
+                            m_cursor.Line++;
+                            m_cursor.ByteOffset =
+                                m_buffer.GetLineStartByteOffset(m_cursor.Line);
+                        }
+
                         changed = true;
                         break;
                     }
@@ -437,7 +472,15 @@ namespace TextEditer
         }
         public void EnterKeyPressed(int nLine, ref TextCursor cursor)
         {
-            
+            const string sNewLine = "\r\n";
+
+            m_buffer.InsertUtf8(cursor.Line, cursor.ByteOffset, sNewLine);
+
+            m_buffer.RebuildLineIndex();
+
+            cursor.Line++;
+
+            cursor.ByteOffset = m_buffer.GetLineStartByteOffset(cursor.Line);
         }
         private void UpdateScrollBar()
         {
@@ -500,6 +543,8 @@ namespace TextEditer
                         break;
 
                     string line = m_buffer.GetLineUtf8(lineIndex);
+                    
+                    // line = line.TrimEnd('\r', '\n');
 
                     float x = TextPaddingLeft;
                     float y = i * m_nLineHeight;

@@ -69,6 +69,7 @@ namespace TextEditer
                         streamWriter.Write(sMainText);
                         nSaved = 1;
                     } */
+                    textEditer.Save(sFilePath);
                     m_dateTimeLastWrited = File.GetLastWriteTime(sFilePath);
                 }
             }
@@ -87,12 +88,10 @@ namespace TextEditer
                 dl.RestoreDirectory = true;
                 if (dl.ShowDialog() == DialogResult.OK)
                 {
-                    using (StreamWriter streamWriter = new StreamWriter(dl.FileName, false, Encoding.UTF8))
-                    {
-                        // streamWriter.Write(sMainText);
-                        sFileFullPath = dl.FileName;
-                        nSaved = 1;
-                    }
+                    sFileFullPath = dl.FileName;
+                    nSaved = 1;
+                    textEditer.Save(dl.FileName);
+                    
                     m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
                 }
             }
