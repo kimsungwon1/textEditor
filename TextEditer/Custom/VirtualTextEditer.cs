@@ -90,15 +90,14 @@ namespace TextEditer
             Invalidate();
         }
 
-        public void Save(string path)
+        public void SaveAs(string sPath)
         {
-            byte[] data = m_buffer.BuildFullText();
+            m_buffer.SaveAs(sPath);
+        }
 
-            m_buffer.Reset();
-
-            File.WriteAllBytes(path, data);
-
-            m_buffer.ResetWithNewContent(path, data);
+        public void Save()
+        {
+            m_buffer.Save();
         }
 
         protected override void OnHandleCreated(EventArgs e)

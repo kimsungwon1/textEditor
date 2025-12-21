@@ -24,29 +24,80 @@ namespace TextEditer
 
         public long m_nLength { get; private set; }
         public int m_nLineCount => m_listLineStartOffsets.Count;
-        
+
+        private string m_currentPath;
         private string m_snapshotPath;
 
         public void LoadOriginal(string sPath)
         {
             ResetDocument();
+            m_currentPath = sPath;
 
-            m_fileStream = new FileStream(sPath, FileMode.Open, FileAccess.ReadWrite,
-                FileShare.ReadWrite | FileShare.Delete);
+            byte[] data = File.ReadAllBytes(sPath);
 
-            m_dwOriginalLen = m_fileStream.Length;
+            CreateSnapshotFromBytes(data);
+        }
+        private void CreateSnapshotFromBytes(byte[] data)
+        {
+            CloseSnapshotHandles();
+            if (!string.IsNullOrEmpty(m_snapshotPath))
+            {
+                File.Delete(m_snapshotPath);
+                m_snapshotPath = null;
+            }
+
+            m_snapshotPath = Path.GetTempFileName();
+            File.WriteAllBytes(m_snapshotPath, data);
+
+            m_fileStream = new FileStream(
+                m_snapshotPath,
+                FileMode.Open,
+                FileAccess.ReadWrite,
+                FileShare.ReadWrite | FileShare.Delete
+            );
+
+            m_dwOriginalLen = data.LongLength;
 
             m_memoryMappedFile = MemoryMappedFile.CreateFromFile(
-                m_fileStream, null, m_dwOriginalLen, MemoryMappedFileAccess.ReadWrite,
-                HandleInheritability.None, false);
+                m_fileStream,
+                null,
+                m_dwOriginalLen,
+                MemoryMappedFileAccess.ReadWrite,
+                HandleInheritability.None,
+                false
+            );
 
             m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, m_dwOriginalLen);
 
             m_listPieces.Clear();
-            m_listPieces.Add(new cPiece(PieceSource.Original, 0, checked((int)m_dwOriginalLen))); // 원본 1조각
-            m_nLength = m_dwOriginalLen;
+            m_listPieces.Add(new cPiece(PieceSource.Original, 0, (int)m_dwOriginalLen));
 
-            m_listLineStartOffsets = BuildLineIndex();
+            m_memoryStream_ofAddPiece.SetLength(0);
+
+            RebuildLineIndex();
+            m_nLength = m_dwOriginalLen;
+        }
+        public void Save()
+        {
+            if (string.IsNullOrEmpty(m_currentPath))
+                throw new InvalidOperationException("No current file path.");
+
+            byte[] data = BuildFullText();
+
+            string tmp = m_currentPath + ".tmp";
+            File.WriteAllBytes(tmp, data);
+
+            if (File.Exists(m_currentPath))
+                File.Replace(tmp, m_currentPath, null);
+            else
+                File.Move(tmp, m_currentPath);
+
+            CreateSnapshotFromBytes(data);
+        }
+        public void SaveAs(string newPath)
+        {
+            m_currentPath = newPath;
+            Save();
         }
 
         public void InsertUtf8(int nLine, long dwPos, string sText)
@@ -82,8 +133,7 @@ namespace TextEditer
             m_nLength += bytes.Length;
             MergeNeighborsAround(pieceIndex);
 
-            RealignLineOffset(nLine, bytes.Length);
-            // m_listLineStartOffsets = BuildLineIndex();
+            // RealignLineOffset(nLine, bytes.Length);
         }
 
         public void Delete(int nLine, long dwPos, int nByteCount, bool bLinesUpdate = false)
@@ -116,7 +166,6 @@ namespace TextEditer
             {
                 RealignLineOffset(nLine, -removeCount);
             }
-            // m_listLineStartOffsets = BuildLineIndex();
         }
 
         public string ReadRangeUtf8(long dwPos, int nByteCount)
@@ -532,52 +581,6 @@ namespace TextEditer
                 }
                 else break;
             }
-        }
-        private void CreateSnapshotFromBytes(byte[] data)
-        {
-            // 1) 기존 스냅샷 닫기 + 기존 스냅샷 파일 삭제
-            CloseSnapshotHandles();
-            if (!string.IsNullOrEmpty(m_snapshotPath))
-            {
-                File.Delete(m_snapshotPath);
-                m_snapshotPath = null;
-            }
-
-            // 2) 새 스냅샷 파일 생성
-            m_snapshotPath = Path.GetTempFileName();
-            File.WriteAllBytes(m_snapshotPath, data);
-
-            // 3) 스냅샷 파일을 MMF로 매핑 (이건 원본 파일이 아니라 temp라서 안전)
-            m_fileStream = new FileStream(
-                m_snapshotPath,
-                FileMode.Open,
-                FileAccess.ReadWrite,
-                FileShare.ReadWrite | FileShare.Delete
-            );
-
-            m_dwOriginalLen = data.LongLength;
-
-            m_memoryMappedFile = MemoryMappedFile.CreateFromFile(
-                m_fileStream,
-                null,
-                m_dwOriginalLen,
-                MemoryMappedFileAccess.ReadWrite,
-                HandleInheritability.None,
-                false
-            );
-
-            m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, m_dwOriginalLen);
-
-            // 4) PieceTable 초기화: Original 1조각
-            m_listPieces.Clear();
-            m_listPieces.Add(new cPiece(PieceSource.Original, 0, (int)m_dwOriginalLen));
-
-            // 5) AddPiece 비우기
-            m_memoryStream_ofAddPiece.SetLength(0);
-
-            // 6) 라인 인덱스 재구성 + 길이 갱신
-            RebuildLineIndex();
-            m_nLength = m_dwOriginalLen;
         }
         private void ResetDocument()
         {
