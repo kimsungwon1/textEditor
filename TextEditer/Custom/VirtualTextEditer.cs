@@ -466,7 +466,7 @@ namespace TextEditer
         }
         public void EnterKeyPressed(int nLine, ref TextCursor cursor)
         {
-            const string sNewLine = "\r\n";
+            const string sNewLine = "\r";
 
             m_buffer.InsertUtf8(cursor.Line, cursor.ByteOffset, sNewLine);
 

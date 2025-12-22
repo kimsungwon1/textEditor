@@ -287,6 +287,35 @@ namespace TextEditer
 
             return m_listLineStartOffsets[afterLine] + addOffset;
         }
+        public long FindLineStartOffset(int targetLine)
+        {
+            if (targetLine <= 0)
+                return 0;
+
+            long offset = 0;
+            int line = 0;
+            const int CHUNK = 4096;
+
+            while (true)
+            {
+                byte[] buf = ReadRawBytes(offset, CHUNK); // ⭐ 라인 인자 없음
+
+                if (buf.Length == 0)
+                    return m_nLength;
+
+                for (int i = 0; i < buf.Length; i++)
+                {
+                    if (buf[i] == (byte)'\n')
+                    {
+                        line++;
+                        if (line == targetLine)
+                            return offset + i + 1;
+                    }
+                }
+
+                offset += buf.Length;
+            }
+        }
         public string GetLineUtf8(int nLine)
         {
             long dwStart = GetLineStartByteOffset(nLine);
@@ -297,7 +326,10 @@ namespace TextEditer
             int nLen = (int)(dwEnd - dwStart);
             if (nLen <= 0) return "";
 
-            return ReadRangeUtf8(nLine, dwStart, nLen).TrimEnd('\r', '\n');
+            string line = ReadRangeUtf8(nLine, dwStart, nLen);
+            if (line.EndsWith("\n"))
+                line = line.Substring(0, line.Length - 1);
+            return line;
         }
         public string ReadRangeUtf8(int nLine, long dwPos, int nByteCount)
         {
@@ -361,7 +393,7 @@ namespace TextEditer
                             );
 
                             srcPos += skip;
-                            docPos += skip;
+                            // docPos += skip;
                         }
                     }
                 }
@@ -397,8 +429,6 @@ namespace TextEditer
             string sSubLine = sLine.Substring(0, nColumn);
             return dwLineStart + Encoding.UTF8.GetByteCount(sSubLine);
         }
-
-
         public long GetLineEndByteOffset(int line)
         {
             if (line + 1 < m_nLineCount)
@@ -412,11 +442,12 @@ namespace TextEditer
                 return Array.Empty<byte>();
 
             long endPos = Math.Min(m_nLength, pos + byteCount);
+            int sumOffsets = GetSumOffsetTillLine(nLine, out int afterLine);
 
             using (MemoryStream ms = new MemoryStream(byteCount))
             {
                 long docPos = pos; // 문서 기준 위치
-                long srcPos = pos; // 원본(MMF) 기준 위치
+                long srcPos = pos - sumOffsets; // 원본(MMF) 기준 위치
 
                 List<cPiece> pieces = null;
                 m_dicPiecesAtLine.TryGetValue(nLine, out pieces);
@@ -472,7 +503,7 @@ namespace TextEditer
                             );
 
                             srcPos += skip;
-                            docPos += skip;
+                            // docPos += skip;
                         }
                     }
                 }
@@ -488,6 +519,18 @@ namespace TextEditer
 
                 return ms.ToArray();
             }
+        }
+        public byte[] ReadRawBytes(long pos, int byteCount)
+        {
+            if (byteCount <= 0 || pos < 0 || pos >= m_nLength)
+                return Array.Empty<byte>();
+
+            long endPos = Math.Min(m_nLength, pos + byteCount);
+            int len = (int)(endPos - pos);
+
+            byte[] buf = new byte[len];
+            m_memoryMappedViewAccessor.ReadArray(pos, buf, 0, len);
+            return buf;
         }
         public int GetPreviousCharByteLength(int nLine, long byteOffset)
         {
