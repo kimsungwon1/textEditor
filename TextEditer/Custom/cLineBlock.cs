@@ -73,7 +73,7 @@ namespace TextEditer
             {
                 long dwToRead = Math.Min(dwEnd - dwPos, BUF);
 
-                bytes = textBuffer.ReadRangeBytes(dwPos, (int)dwToRead);
+                // bytes = textBuffer.ReadRangeBytes(dwPos, (int)dwToRead);
                 long byteRead = Math.Min(dwPos + dwToRead, bytes.Length);
                 for (long dwIndex = dwPos; dwIndex < byteRead; dwIndex++, rel++)
                 {
@@ -163,25 +163,25 @@ namespace TextEditer
 
         public long GetSplitPos(long startPos, long dwMid, long endPos, ITextBuffer textBuffer)
         {
-            int splitCount1 = (int)(dwMid - startPos);
-            int splitCount2 = (int)(endPos - dwMid);
-            
-            byte[] secondSplit = textBuffer.ReadRangeBytes(dwMid, splitCount2);
-            for(long i = 0; i < splitCount2; i++)
-            {
-                if(secondSplit[i] == '\n')
-                {
-                    return dwMid + i;
-                }
-            }
-            byte[] firstSplit = textBuffer.ReadRangeBytes(startPos, splitCount1);
-            for(long i = splitCount1 - 1; i >= 0; i--)
-            {
-                if(firstSplit[i] == '\n')
-                {
-                    return startPos + i;
-                }
-            }
+            // int splitCount1 = (int)(dwMid - startPos);
+            // int splitCount2 = (int)(endPos - dwMid);
+            // 
+            // byte[] secondSplit = textBuffer.ReadRangeBytes(dwMid, splitCount2);
+            // for(long i = 0; i < splitCount2; i++)
+            // {
+            //     if(secondSplit[i] == '\n')
+            //     {
+            //         return dwMid + i;
+            //     }
+            // }
+            // byte[] firstSplit = textBuffer.ReadRangeBytes(startPos, splitCount1);
+            // for(long i = splitCount1 - 1; i >= 0; i--)
+            // {
+            //     if(firstSplit[i] == '\n')
+            //     {
+            //         return startPos + i;
+            //     }
+            // }
             return dwMid;
         }
 

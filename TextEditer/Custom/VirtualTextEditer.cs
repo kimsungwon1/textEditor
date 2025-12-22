@@ -236,7 +236,7 @@ namespace TextEditer
 
                         if (m_cursor.ByteOffset > lineStart)
                         {
-                            int nByte = m_buffer.GetPreviousCharByteLength(m_cursor.ByteOffset);
+                            int nByte = m_buffer.GetPreviousCharByteLength(m_cursor.Line, m_cursor.ByteOffset);
                             if (nByte > 0)
                                 m_cursor.ByteOffset -= nByte;
                         }
@@ -257,7 +257,7 @@ namespace TextEditer
 
                         if (m_cursor.ByteOffset < lineEnd)
                         {
-                            int nByte = m_buffer.GetNextCharByteLength(m_cursor.ByteOffset);
+                            int nByte = m_buffer.GetNextCharByteLength(m_cursor.Line, m_cursor.ByteOffset);
                             if (nByte > 0)
                                 m_cursor.ByteOffset += nByte;
                         }
@@ -302,7 +302,7 @@ namespace TextEditer
                     }
                 case Keys.Delete:
                     {
-                        Delete(m_cursor.Line, ref m_cursor);
+                        Delete(ref m_cursor);
                         break;
                     }
                 case Keys.Enter:
@@ -409,7 +409,7 @@ namespace TextEditer
 
             if (len <= 0) return 0;
 
-            byte[] bytes = m_buffer.ReadRangeBytes(lineStart, (int)len);
+            byte[] bytes = m_buffer.ReadRangeBytes(m_cursor.Line, lineStart, (int)len);
             return Encoding.UTF8.GetCharCount(bytes);
         }
         void Backspace(int nLine, ref TextCursor cursor)
@@ -424,7 +424,7 @@ namespace TextEditer
 
             if(cursor.ByteOffset == lineStart)
             {
-                int newlineBytes = m_buffer.GetPreviousCharByteLength(cursor.ByteOffset);
+                int newlineBytes = m_buffer.GetPreviousCharByteLength(m_cursor.Line, cursor.ByteOffset);
 
                 m_buffer.Delete(cursor.Line - 1, cursor.ByteOffset - newlineBytes, newlineBytes, true);
 
@@ -434,13 +434,13 @@ namespace TextEditer
                 return;
             }
 
-            int bytesToDelete = m_buffer.GetPreviousCharByteLength(cursor.ByteOffset);
+            int bytesToDelete = m_buffer.GetPreviousCharByteLength(m_cursor.Line, cursor.ByteOffset);
 
             m_buffer.Delete(nLine, cursor.ByteOffset - bytesToDelete, bytesToDelete);
             cursor.ByteOffset -= bytesToDelete;
         }
 
-        public void Delete(int nLine, ref TextCursor cursor)
+        public void Delete(ref TextCursor cursor)
         {
             if (cursor.ByteOffset >= m_buffer.m_nLength)
                 return;
@@ -452,17 +452,17 @@ namespace TextEditer
 
             int charBytesToRemove = (int)(nextLineStart - m_cursor.ByteOffset);
 
-            int newLineBytes = GetNewlineByteLength(m_cursor.ByteOffset);
+            int newLineBytes = GetNewlineByteLength(m_cursor.Line, m_cursor.ByteOffset);
 
             if (newLineBytes == 2 || newLineBytes == 1)
             {
-                m_buffer.Delete(nLine, cursor.ByteOffset, charBytesToRemove, true);
+                m_buffer.Delete(m_cursor.Line, cursor.ByteOffset, charBytesToRemove, true);
 
                 return;
             }
 
-            int bytes = m_buffer.GetNextCharByteLength(cursor.ByteOffset);
-            m_buffer.Delete(nLine, cursor.ByteOffset, bytes);
+            int bytes = m_buffer.GetNextCharByteLength(m_cursor.Line,cursor.ByteOffset);
+            m_buffer.Delete(m_cursor.Line, cursor.ByteOffset, bytes);
         }
         public void EnterKeyPressed(int nLine, ref TextCursor cursor)
         {
@@ -685,12 +685,12 @@ namespace TextEditer
             }
             base.Dispose(disposing);
         }
-        private int GetNewlineByteLength(long byteOffset)
+        private int GetNewlineByteLength(int nLine, long byteOffset)
         {
             if (byteOffset >= m_buffer.m_nLength)
                 return 0;
             
-            byte[] buf = m_buffer.ReadRangeBytes(byteOffset, 2);
+            byte[] buf = m_buffer.ReadRangeBytes(nLine, byteOffset, 2);
 
             if (buf.Length >= 2 && buf[0] == (byte)'\r' && buf[1] == (byte)'\n')
                 return 2;

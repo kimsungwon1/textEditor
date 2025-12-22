@@ -17,23 +17,21 @@ namespace TextEditer
         private MemoryMappedViewAccessor m_memoryMappedViewAccessor;
         private long m_dwOriginalLen;
 
-        // List<long> m_listLineStartOffsets;
-        private cLineIndexBlocks m_blocks;
+        List<long> m_listLineStartOffsets;
+        private Dictionary<int, List<cPiece>> m_dicPiecesAtLine;
 
-        // private cLineDeltaFenwick m_listLineDeltaOffsets;
-
-        private readonly MemoryStream m_memoryStream_ofAddPiece = new MemoryStream(1024 * 1024);
-        private readonly List<cPiece> m_listPieces = new List<cPiece>(1024);
 
         public long m_nLength { get; private set; }
-        public int m_nLineCount => m_blocks.GetLineCount();// m_listLineStartOffsets.Count;
+        public int m_nLineCount => m_listLineStartOffsets.Count; // m_blocks.GetLineCount();// m_listLineStartOffsets.Count;
 
         private string m_currentPath;
         private string m_snapshotPath;
 
         public ITextBuffer()
         {
-            m_blocks = new cLineIndexBlocks(32);
+            // m_blocks = new cLineIndexBlocks(32);
+            m_dicPiecesAtLine = new Dictionary<int, List<cPiece>>();
+            m_listLineStartOffsets = new List<long>();
         }
 
         public void LoadOriginal(string sPath)
@@ -79,10 +77,7 @@ namespace TextEditer
 
             m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, m_dwOriginalLen);
 
-            m_listPieces.Clear();
-            m_listPieces.Add(new cPiece(PieceSource.Original, 0, (int)m_dwOriginalLen));
-
-            m_memoryStream_ofAddPiece.SetLength(0);
+            m_dicPiecesAtLine.Clear();
 
             m_nLength = m_dwOriginalLen;
         }
@@ -116,37 +111,39 @@ namespace TextEditer
 
             byte[] bytes = Encoding.UTF8.GetBytes(sText);
 
-            long dwAddStart = m_memoryStream_ofAddPiece.Length;
-            m_memoryStream_ofAddPiece.Write(bytes, 0, bytes.Length);
-
+            int lineBreakDeletedCount = 0;
+            for (int i = 0; i < sText.Length; i++)
+            {
+                if (sText[i] == '\n')
+                {
+                    lineBreakDeletedCount++;
+                }
+            }
+            cPieceToAdd newPiece = new cPieceToAdd(dwPos, sText, lineBreakDeletedCount);
             // 삽입 지점의 piece를 찾아 split 후 add piece 끼워넣기
-            FindPieceAt(dwPos, out int pieceIndex, out int innerOffset);
+            cPiece foundPiece = FindPieceAt(nLine, dwPos);
+            bool bMasterAlive = true;
+            bool bNewOneAlive = true;
 
-            cPiece target = m_listPieces[pieceIndex];
-            int beforeLen = innerOffset;
-            int afterLen = target.Length - innerOffset;
+            if (foundPiece != null && foundPiece.IsAdd)
+            {
+                foundPiece.Merge(newPiece, dwPos - foundPiece.Start, out bMasterAlive, out bNewOneAlive);
+            }
 
-            List<cPiece> newPieces = new List<cPiece>(3);
+            if (!bMasterAlive)
+            {
+                DeletePiece(nLine, foundPiece);
+            }
+            if(bNewOneAlive)
+            {
+                AddPiece(nLine, newPiece);
+            }
 
-            if (beforeLen > 0)
-                newPieces.Add(new cPiece(target.Source, target.Start, beforeLen));
-
-            newPieces.Add(new cPiece(PieceSource.Add, dwAddStart, bytes.Length));
-
-            if (afterLen > 0)
-                newPieces.Add(new cPiece(target.Source, target.Start + innerOffset, afterLen));
-
-            m_listPieces.RemoveAt(pieceIndex);
-            m_listPieces.InsertRange(pieceIndex, newPieces);
+            ShiftPiecesAfter(nLine, dwPos, bytes.Length);
 
             m_nLength += bytes.Length;
-            MergeNeighborsAround(pieceIndex);
-
-            List<long> newLineOffsets = new List<long>();
-
-            m_blocks.OnInsert(dwPos, bytes, this);
         }
-
+        
         public void Delete(int nLine, long dwPos, int nByteCount, bool bLinesUpdate = false)
         {
             if (nByteCount <= 0 || m_nLength == 0) return;
@@ -155,56 +152,141 @@ namespace TextEditer
 
             long dwEndPos = Math.Min(m_nLength, dwPos + nByteCount);
 
-            // [pos, endPos) 범위를 piece 단위로 제거
-            SplitAt(dwPos, out int startIdx);
-            SplitAt(dwEndPos, out int endIdx); // endPos 위치도 split
+            // lineDeletedCount 계산.
+            int lineBreakDeletedCount = 0;
 
-            // startIdx ~ endIdx-1 조각 제거
-            int removeCount = endIdx - startIdx;
-            for (int i = 0; i < removeCount; i++)
-                m_listPieces.RemoveAt(startIdx);
+            cPieceToRemove newPiece = new cPieceToRemove(dwPos, nByteCount, lineBreakDeletedCount);
+            cPiece foundPiece = FindPieceAt(nLine, dwPos);
+            bool bMasterAlive = true;
+            bool bNewOneAlive = true;
 
-            m_nLength -= (dwEndPos - dwPos);
-
-            // 이웃 병합
-            MergeNeighborsAround(Math.Max(0, startIdx - 1));
-
-            byte[] readBytes = ReadRangeBytes(startIdx, removeCount);
-
-            m_blocks.OnDelete(dwPos, readBytes, this);
-        }
-
-        public string ReadRangeUtf8(long dwPos, int nByteCount)
-        {
-            if (nByteCount <= 0 || dwPos < 0 || dwPos >= m_nLength) return string.Empty;
-            long dwEndPos = Math.Min(m_nLength, dwPos + nByteCount);
-
-            using (MemoryStream memoryStream = new MemoryStream(nByteCount))
+            if(foundPiece != null)
             {
-                long dwCurrent = 0;
+                foundPiece.Merge(newPiece, dwPos - foundPiece.Start, out bMasterAlive, out bNewOneAlive);
+            }
 
-                for (int i = 0; i < m_listPieces.Count; i++)
+            if (!bMasterAlive)
+            {
+                DeletePiece(nLine, foundPiece);
+            }
+            if (bNewOneAlive)
+            {
+                AddPiece(nLine, newPiece);
+            }
+
+            ShiftPiecesAfter(nLine, dwPos, -nByteCount);
+
+            m_nLength -= nByteCount;
+        }
+        private cPiece FindPieceAt(int lineIndex, long dwPos)
+        {
+            long lineStartBytes = GetLineStartByteOffset(lineIndex);
+            int index = 0;
+            if (!m_dicPiecesAtLine.ContainsKey(lineIndex))
+            {
+                return null;
+            }
+            foreach (cPiece piece in m_dicPiecesAtLine[lineIndex])
+            {
+                int nLength;
+                if (piece.IsAdd)
                 {
-                    cPiece p = m_listPieces[i];
-                    long dwNext = dwCurrent + p.Length;
-
-                    if (dwNext <= dwPos) { dwCurrent = dwNext; continue; }
-                    if (dwCurrent >= dwEndPos) break;
-
-                    long segStartInDoc = Math.Max(dwCurrent, dwPos);
-                    long segEndInDoc = Math.Min(dwNext, dwEndPos);
-
-                    int take = (int)(segEndInDoc - segStartInDoc);
-                    int skip = (int)(segStartInDoc - dwCurrent);
-
-                    WritePieceBytes(memoryStream, p, skip, take);
-                    dwCurrent = dwNext;
+                    cPieceToAdd pieceToAdd = (cPieceToAdd)piece;
+                    nLength = pieceToAdd.Content.Length;
                 }
+                else
+                {
+                    cPieceToRemove pieceToRemove = (cPieceToRemove)piece;
+                    nLength = pieceToRemove.CountToRemove;
+                }
+                if (piece.Start <= dwPos && dwPos < piece.Start + nLength)
+                {
+                    return piece;
+                }
+                index++;
+            }
 
-                return Encoding.UTF8.GetString(memoryStream.ToArray());
+            return null;
+        }
+        private void DeletePiece(int nLine, cPiece piece)
+        {
+            m_dicPiecesAtLine[nLine].Remove(piece);
+        }
+        private void AddPiece(int nLine, cPiece piece)
+        {
+            if (!m_dicPiecesAtLine.ContainsKey(nLine))
+            {
+                m_dicPiecesAtLine[nLine] = new List<cPiece>();
+            }
+            m_dicPiecesAtLine[nLine].Add(piece);
+        }
+        private void ShiftPiecesAfter(int fromLine, long fromOffset, long delta)
+        {
+            // fromLine 이후의 모든 라인
+            foreach (var kv in m_dicPiecesAtLine)
+            {
+                int line = kv.Key;
+                if (line < fromLine)
+                    continue;
+
+                foreach (var piece in kv.Value)
+                {
+                    if (line == fromLine)
+                    {
+                        if (piece.Start > fromOffset)
+                            piece.Start += delta;
+                    }
+                    else
+                    {
+                        piece.Start += delta;
+                    }
+                }
             }
         }
+        public int GetSumOffsetTillLine(int originalLine, out int afterLine)
+        {
+            int addOffset = 0;
+            foreach (var item in m_dicPiecesAtLine)
+            {
+                if (item.Key < originalLine)
+                {
+                    foreach (cPiece piece in item.Value)
+                    {
+                        if (piece.IsAdd)
+                        {
+                            cPieceToAdd pieceToAdd = (cPieceToAdd)piece;
+                            addOffset += pieceToAdd.Content.Length;
+                            if (piece.LineBreaks > 0)
+                            {
+                                originalLine -= piece.LineBreaks;
+                            }
+                        }
+                        else
+                        {
+                            cPieceToRemove pieceToRemove = (cPieceToRemove)piece;
+                            addOffset -= pieceToRemove.CountToRemove;
+                            if (piece.LineBreaks > 0)
+                            {
+                                originalLine += piece.LineBreaks;
+                            }
+                        }
+                    }
+                }
+            }
+            afterLine = originalLine;
+            return addOffset;
+        }
+        public long GetLineStartByteOffset(int line)
+        {
+            int afterLine;
+            int addOffset = GetSumOffsetTillLine(line, out afterLine);
+            if (afterLine < 0) return 0;
 
+            if (afterLine >= m_listLineStartOffsets.Count)
+                return m_nLength + addOffset;
+
+            return m_listLineStartOffsets[afterLine] + addOffset;
+        }
         public string GetLineUtf8(int nLine)
         {
             long dwStart = GetLineStartByteOffset(nLine);
@@ -215,8 +297,88 @@ namespace TextEditer
             int nLen = (int)(dwEnd - dwStart);
             if (nLen <= 0) return "";
 
-            return ReadRangeUtf8(dwStart, nLen).TrimEnd('\r', '\n');
+            return ReadRangeUtf8(nLine, dwStart, nLen).TrimEnd('\r', '\n');
         }
+        public string ReadRangeUtf8(int nLine, long dwPos, int nByteCount)
+        {
+            if (nByteCount <= 0 || dwPos < 0 || dwPos >= m_nLength) return string.Empty;
+            long dwEndPos = Math.Min(m_nLength, dwPos + nByteCount);
+            int sumOffsets = GetSumOffsetTillLine(nLine, out int afterLine);
+
+            using (MemoryStream ms = new MemoryStream(nByteCount))
+            {
+                long docPos = dwPos;   // 문서 기준
+                long srcPos = dwPos - sumOffsets;   // 원본 기준
+
+                if (m_dicPiecesAtLine.TryGetValue(nLine, out List<cPiece> pieces))
+                {
+                    foreach (cPiece piece in pieces.OrderBy(p => p.Start))
+                    {
+                        if (piece.Start >= dwEndPos)
+                            break;
+
+                        // piece 전까지의 원본 구간
+                        if (docPos < piece.Start)
+                        {
+                            int toRead = (int)Math.Min(
+                                piece.Start - docPos,
+                                dwEndPos - docPos
+                            );
+
+                            byte[] buf = new byte[toRead];
+                            m_memoryMappedViewAccessor.ReadArray(srcPos, buf, 0, toRead);
+                            ms.Write(buf, 0, toRead);
+
+                            docPos += toRead;
+                            srcPos += toRead;
+                        }
+
+                        if (docPos >= dwEndPos)
+                            break;
+
+                        // Add Piece
+                        if (piece.IsAdd)
+                        {
+                            cPieceToAdd add = piece as cPieceToAdd;
+                            byte[] addBytes = Encoding.UTF8.GetBytes(add.Content);
+
+                            int writable = (int)Math.Min(
+                                addBytes.Length,
+                                dwEndPos - docPos
+                            );
+
+                            ms.Write(addBytes, 0, writable);
+                            docPos += writable;
+                        }
+                        // Remove Piece
+                        else
+                        {
+                            cPieceToRemove rem = piece as cPieceToRemove;
+
+                            int skip = (int)Math.Min(
+                                rem.CountToRemove,
+                                dwEndPos - docPos
+                            );
+
+                            srcPos += skip;
+                            docPos += skip;
+                        }
+                    }
+                }
+
+                // 남은 원본
+                if (docPos < dwEndPos)
+                {
+                    int remain = (int)(dwEndPos - docPos);
+                    byte[] buf = new byte[remain];
+                    m_memoryMappedViewAccessor.ReadArray(srcPos, buf, 0, remain);
+                    ms.Write(buf, 0, remain);
+                }
+
+                return Encoding.UTF8.GetString(ms.ToArray());
+            }
+        }
+
         public int GetLineLength(int nIndex)
         {
             return GetLineUtf8(nIndex).Length;
@@ -236,14 +398,6 @@ namespace TextEditer
             return dwLineStart + Encoding.UTF8.GetByteCount(sSubLine);
         }
 
-        public long GetLineStartByteOffset(int line)
-        {
-            if (line < 0) return 0;
-            if (line >= m_blocks.GetLineCount())
-                return m_nLength;
-
-            return m_blocks.GetLineStartOffset(line);
-        }
 
         public long GetLineEndByteOffset(int line)
         {
@@ -252,7 +406,7 @@ namespace TextEditer
             return m_nLength;
         }
 
-        public byte[] ReadRangeBytes(long pos, int byteCount)
+        public byte[] ReadRangeBytes(int nLine, long pos, int byteCount)
         {
             if (byteCount <= 0 || pos < 0 || pos >= m_nLength)
                 return Array.Empty<byte>();
@@ -261,35 +415,87 @@ namespace TextEditer
 
             using (MemoryStream ms = new MemoryStream(byteCount))
             {
-                long cur = 0;
+                long docPos = pos; // 문서 기준 위치
+                long srcPos = pos; // 원본(MMF) 기준 위치
 
-                foreach (cPiece p in m_listPieces)
+                List<cPiece> pieces = null;
+                m_dicPiecesAtLine.TryGetValue(nLine, out pieces);
+
+                if (pieces != null && pieces.Count > 0)
                 {
-                    long next = cur + p.Length;
+                    foreach (var piece in pieces.OrderBy(p => p.Start))
+                    {
+                        if (piece.Start >= endPos)
+                            break;
 
-                    if (next <= pos) { cur = next; continue; }
-                    if (cur >= endPos) break;
+                        // piece 시작 전의 원본 구간
+                        if (docPos < piece.Start)
+                        {
+                            int toRead = (int)Math.Min(
+                                piece.Start - docPos,
+                                endPos - docPos
+                            );
 
-                    long segStartInDoc = Math.Max(cur, pos);
-                    long segEndInDoc = Math.Min(next, endPos);
+                            byte[] buf = new byte[toRead];
+                            m_memoryMappedViewAccessor.ReadArray(srcPos, buf, 0, toRead);
+                            ms.Write(buf, 0, toRead);
 
-                    int take = (int)(segEndInDoc - segStartInDoc);
-                    int skip = (int)(segStartInDoc - cur);
+                            docPos += toRead;
+                            srcPos += toRead;
+                        }
 
-                    WritePieceBytes(ms, p, skip, take);
-                    cur = next;
+                        if (docPos >= endPos)
+                            break;
+
+                        // Add Piece
+                        if (piece.IsAdd)
+                        {
+                            var add = (cPieceToAdd)piece;
+                            byte[] addBytes = Encoding.UTF8.GetBytes(add.Content);
+
+                            int writable = (int)Math.Min(
+                                addBytes.Length,
+                                endPos - docPos
+                            );
+
+                            ms.Write(addBytes, 0, writable);
+                            docPos += writable;
+                        }
+                        // Remove Piece
+                        else
+                        {
+                            var rem = (cPieceToRemove)piece;
+
+                            int skip = (int)Math.Min(
+                                rem.CountToRemove,
+                                endPos - docPos
+                            );
+
+                            srcPos += skip;
+                            docPos += skip;
+                        }
+                    }
+                }
+
+                // 남은 원본 영역
+                if (docPos < endPos)
+                {
+                    int remain = (int)(endPos - docPos);
+                    byte[] buf = new byte[remain];
+                    m_memoryMappedViewAccessor.ReadArray(srcPos, buf, 0, remain);
+                    ms.Write(buf, 0, remain);
                 }
 
                 return ms.ToArray();
             }
         }
-        public int GetPreviousCharByteLength(long byteOffset)
+        public int GetPreviousCharByteLength(int nLine, long byteOffset)
         {
             if (byteOffset <= 0)
                 return 0;
 
             int maxLookback = (int)Math.Min(4, byteOffset);
-            byte[] buf = ReadRangeBytes(byteOffset - maxLookback, maxLookback);
+            byte[] buf = ReadRangeBytes(nLine, byteOffset - maxLookback, maxLookback);
 
             for (int i = buf.Length - 1; i >= 0; i--)
             {
@@ -306,13 +512,13 @@ namespace TextEditer
             return 1;
         }
 
-        public int GetNextCharByteLength(long byteOffset)
+        public int GetNextCharByteLength(int nLine, long byteOffset)
         {
             if (byteOffset >= m_nLength)
                 return 0;
 
             // 최대 4바이트면 UTF-8 문자 하나 충분
-            byte[] buf = ReadRangeBytes(byteOffset, 4);
+            byte[] buf = ReadRangeBytes(nLine, byteOffset, 4);
             if (buf.Length == 0)
                 return 0;
 
@@ -340,33 +546,6 @@ namespace TextEditer
         {
             using (MemoryStream ms = new MemoryStream())
             {
-                foreach (var piece in m_listPieces)
-                {
-                    if (piece.Length <= 0)
-                        continue;
-
-                    if (piece.Source == PieceSource.Original)
-                    {
-                        byte[] buffer = new byte[piece.Length];
-                        m_memoryMappedViewAccessor.ReadArray(
-                            piece.Start,
-                            buffer,
-                            0,
-                            piece.Length
-                        );
-
-                        ms.Write(buffer, 0, buffer.Length);
-                    }
-                    else
-                    {
-                        m_memoryStream_ofAddPiece.Position = piece.Start;
-
-                        byte[] buffer = new byte[piece.Length];
-                        m_memoryStream_ofAddPiece.Read(buffer, 0, buffer.Length);
-
-                        ms.Write(buffer, 0, buffer.Length);
-                    }
-                }
 
                 return ms.ToArray();
             }
@@ -413,189 +592,61 @@ namespace TextEditer
             m_memoryMappedViewAccessor =
                 m_memoryMappedFile.CreateViewAccessor(0, m_dwOriginalLen);
 
-            m_memoryStream_ofAddPiece.SetLength(0);
-
-            m_listPieces.Clear();
-            m_listPieces.Add(new cPiece(PieceSource.Original, 0, (int)m_dwOriginalLen));
-
             BuildLineIndex();
         }
         public void RebuildLineIndex()
         {
-            BuildLineIndex();
-            m_blocks.BuildFromDocumemt(m_nLength, this);
-            // m_listLineStartOffsets = BuildLineIndex();
-            // m_listLineDeltaOffsets = new cLineDeltaFenwick(m_listLineStartOffsets.Count);
+            m_listLineStartOffsets = BuildLineIndex();
         }
         private List<long> BuildLineIndex()
         {
-            List<long> list = new List<long>(1024);
-            list.Add(0);
+            List<long> lineOffsets = new List<long>(1024);
 
-            long docOffset = 0;
+            lineOffsets.Add(0);
 
-            foreach (cPiece piece in m_listPieces)
+            const int BUFFER_SIZE = 64 * 1024;
+            byte[] buffer = new byte[BUFFER_SIZE];
+
+            long filePos = 0;
+            long length = m_nLength;
+
+            while (filePos < length)
             {
-                if (piece.Source == PieceSource.Original)
+                int toRead = (int)Math.Min(BUFFER_SIZE, length - filePos);
+
+                m_memoryMappedViewAccessor.ReadArray(
+                    filePos,
+                    buffer,
+                    0,
+                    toRead
+                );
+
+                for (int i = 0; i < toRead; i++)
                 {
-                    byte[] buf = new byte[8192];
-                    long remain = piece.Length;
-                    long off = piece.Start;
+                    byte b = buffer[i];
 
-                    while (remain > 0)
+                    if (b == (byte)'\n')
                     {
-                        int toRead = (int)Math.Min(buf.Length, remain);
-                        m_memoryMappedViewAccessor.ReadArray(off, buf, 0, toRead);
-
-                        for (int i = 0; i < toRead; i++)
+                        // 다음 줄 시작 위치
+                        long nextLineOffset = filePos + i + 1;
+                        if (nextLineOffset < length)
                         {
-                            docOffset++;
-                            if (buf[i] == (byte)'\n')
-                                list.Add(docOffset);
+                            lineOffsets.Add(nextLineOffset);
                         }
-
-                        off += toRead;
-                        remain -= toRead;
                     }
                 }
-                else
-                {
-                    m_memoryStream_ofAddPiece.Position = piece.Start;
-                    byte[] buf = new byte[8192];
-                    int remain = piece.Length;
 
-                    while (remain > 0)
-                    {
-                        int read = m_memoryStream_ofAddPiece.Read(buf, 0, Math.Min(buf.Length, remain));
-                        if (read <= 0)
-                            break;
-
-                        for (int i = 0; i < read; i++)
-                        {
-                            docOffset++;
-                            if (buf[i] == (byte)'\n')
-                                list.Add(docOffset);
-                        }
-                        remain -= read;
-                    }
-                }
+                filePos += toRead;
             }
 
-            return list;
-        }
+            return lineOffsets;
+        }        
 
-        private void FindPieceAt(long pos, out int pieceIndex, out int innerOffset)
-        {
-            // pos는 문서 전체(바이트) 오프셋
-            long cur = 0;
-            for (int i = 0; i < m_listPieces.Count; i++)
-            {
-                var p = m_listPieces[i];
-                long next = cur + p.Length;
-                if (pos < next)
-                {
-                    pieceIndex = i;
-                    innerOffset = (int)(pos - cur);
-                    return;
-                }
-                cur = next;
-            }
-
-            // pos == Length (끝)인 경우: 마지막 piece 끝으로 처리
-            pieceIndex = m_listPieces.Count - 1;
-            innerOffset = m_listPieces[pieceIndex].Length;
-        }
-
-        private void SplitAt(long pos, out int pieceIndexAfterSplit)
-        {
-            // pos 지점이 piece 중간이면 split해서 경계를 만든다.
-            FindPieceAt(pos, out int idx, out int inner);
-            var p = m_listPieces[idx];
-
-            if (inner == 0)
-            {
-                pieceIndexAfterSplit = idx;
-                return;
-            }
-            if (inner == p.Length)
-            {
-                pieceIndexAfterSplit = idx + 1;
-                return;
-            }
-
-            var left = new cPiece(p.Source, p.Start, inner);
-            var right = new cPiece(p.Source, p.Start + inner, p.Length - inner);
-
-            m_listPieces[idx] = left;
-            m_listPieces.Insert(idx + 1, right);
-
-            pieceIndexAfterSplit = idx + 1;
-        }
-
-        private void WritePieceBytes(Stream dst, cPiece p, int skip, int take)
-        {
-            if (take <= 0) return;
-
-            if (p.Source == PieceSource.Original)
-            {
-                if (m_memoryMappedViewAccessor == null)
-                    return;
-                byte[] buf = new byte[take];
-                m_memoryMappedViewAccessor.ReadArray(p.Start + skip, buf, 0, take);
-                dst.Write(buf, 0, take);
-            }
-            else
-            {
-                long start = p.Start + skip;
-                m_memoryStream_ofAddPiece.Position = start;
-                byte[] buf = new byte[take];
-                int read = m_memoryStream_ofAddPiece.Read(buf, 0, take);
-                dst.Write(buf, 0, read);
-            }
-        }
-
-        private void MergeNeighborsAround(int index)
-        {
-            // 인접 조각이 같은 소스이고, 오프셋이 연속이면 합친다
-            int i = Math.Max(0, Math.Min(index, m_listPieces.Count - 1));
-
-            // 왼쪽으로 병합
-            while (i - 1 >= 0)
-            {
-                var a = m_listPieces[i - 1];
-                var b = m_listPieces[i];
-
-                if (a.Source == b.Source && a.Start + a.Length == b.Start)
-                {
-                    m_listPieces[i - 1] = new cPiece(a.Source, a.Start, a.Length + b.Length);
-                    m_listPieces.RemoveAt(i);
-                    i--;
-                }
-                else break;
-            }
-
-            // 오른쪽으로 병합
-            while (i + 1 < m_listPieces.Count)
-            {
-                var a = m_listPieces[i];
-                var b = m_listPieces[i + 1];
-
-                if (a.Source == b.Source && a.Start + a.Length == b.Start)
-                {
-                    m_listPieces[i] = new cPiece(a.Source, a.Start, a.Length + b.Length);
-                    m_listPieces.RemoveAt(i + 1);
-                }
-                else break;
-            }
-        }
         private void ResetDocument()
         {
             m_memoryMappedViewAccessor?.Dispose(); m_memoryMappedViewAccessor = null;
             m_memoryMappedFile?.Dispose(); m_memoryMappedFile = null;
             m_fileStream?.Dispose(); m_fileStream = null;
-
-            m_memoryStream_ofAddPiece.SetLength(0);
-            m_listPieces.Clear();
 
             m_nLength = 0;
         }
@@ -613,8 +664,6 @@ namespace TextEditer
             m_memoryMappedFile?.Dispose(); m_memoryMappedFile = null;
             m_fileStream?.Dispose(); m_fileStream = null;
 
-            m_memoryStream_ofAddPiece?.Dispose();
-            m_listPieces.Clear();
             m_nLength = 0;
             m_dwOriginalLen = 0;
         }
