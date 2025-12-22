@@ -67,7 +67,7 @@ namespace TextEditer
             m_caretTimer.Start();
         }
 
-        // ✅ 외부에서 호출하는 로드 함수
+        // 외부에서 호출하는 로드 함수
         public void LoadFile(string path)
         {
             // 기존 버퍼 정리
@@ -389,7 +389,7 @@ namespace TextEditer
 
             m_buffer.InsertUtf8(cursor.Line, pos, text);
 
-            cursor.ByteOffset += bytes.Length;// Encoding.UTF8.GetByteCount(text);
+            cursor.ByteOffset += bytes.Length;
 
             cursor.Line += CountNewLines(text);
 
@@ -470,7 +470,7 @@ namespace TextEditer
 
             m_buffer.InsertUtf8(cursor.Line, cursor.ByteOffset, sNewLine);
 
-            m_buffer.RebuildLineIndex();
+            // m_buffer.RebuildLineIndex();
 
             cursor.Line++;
 
@@ -538,8 +538,6 @@ namespace TextEditer
                         break;
 
                     string line = m_buffer.GetLineUtf8(lineIndex);
-                    
-                    // line = line.TrimEnd('\r', '\n');
 
                     float x = TextPaddingLeft;
                     float y = i * m_nLineHeight;
@@ -577,7 +575,7 @@ namespace TextEditer
             // 3. prefix 문자열
             string prefix = (column == 0) ? string.Empty : lineText.Substring(0, column);
 
-            // 4. GDI+ 정확 측정 (⭐ TextRenderer 절대 사용 안 함)
+            // 4. GDI 정확 측정
             float xOffset = 0f;
             if (prefix.Length > 0)
             {

@@ -16,19 +16,25 @@ namespace TextEditer
         private MemoryMappedFile m_memoryMappedFile;
         private MemoryMappedViewAccessor m_memoryMappedViewAccessor;
         private long m_dwOriginalLen;
-        
-        List<long> m_listLineStartOffsets;
-        private cLineDeltaFenwick m_listLineDeltaOffsets;
+
+        // List<long> m_listLineStartOffsets;
+        private cLineIndexBlocks m_blocks;
+
+        // private cLineDeltaFenwick m_listLineDeltaOffsets;
 
         private readonly MemoryStream m_memoryStream_ofAddPiece = new MemoryStream(1024 * 1024);
         private readonly List<cPiece> m_listPieces = new List<cPiece>(1024);
-        
 
         public long m_nLength { get; private set; }
-        public int m_nLineCount => m_listLineStartOffsets.Count;
+        public int m_nLineCount => m_blocks.GetLineCount();// m_listLineStartOffsets.Count;
 
         private string m_currentPath;
         private string m_snapshotPath;
+
+        public ITextBuffer()
+        {
+            m_blocks = new cLineIndexBlocks(32);
+        }
 
         public void LoadOriginal(string sPath)
         {
@@ -38,6 +44,8 @@ namespace TextEditer
             byte[] data = File.ReadAllBytes(sPath);
 
             CreateSnapshotFromBytes(data);
+
+            RebuildLineIndex();
         }
         private void CreateSnapshotFromBytes(byte[] data)
         {
@@ -76,7 +84,6 @@ namespace TextEditer
 
             m_memoryStream_ofAddPiece.SetLength(0);
 
-            RebuildLineIndex();
             m_nLength = m_dwOriginalLen;
         }
         public void Save()
@@ -135,8 +142,9 @@ namespace TextEditer
             m_nLength += bytes.Length;
             MergeNeighborsAround(pieceIndex);
 
-            m_listLineDeltaOffsets.AddDelta(nLine, bytes.Length);
-            //RealignLineOffset(nLine, bytes.Length);
+            List<long> newLineOffsets = new List<long>();
+
+            m_blocks.OnInsert(dwPos, bytes, this);
         }
 
         public void Delete(int nLine, long dwPos, int nByteCount, bool bLinesUpdate = false)
@@ -161,14 +169,9 @@ namespace TextEditer
             // 이웃 병합
             MergeNeighborsAround(Math.Max(0, startIdx - 1));
 
-            if (bLinesUpdate)
-            {
-                m_listLineStartOffsets = BuildLineIndex();
-            }
-            else
-            {
-                m_listLineDeltaOffsets.AddDelta(nLine, -removeCount);
-            }
+            byte[] readBytes = ReadRangeBytes(startIdx, removeCount);
+
+            m_blocks.OnDelete(dwPos, readBytes, this);
         }
 
         public string ReadRangeUtf8(long dwPos, int nByteCount)
@@ -232,20 +235,23 @@ namespace TextEditer
             string sSubLine = sLine.Substring(0, nColumn);
             return dwLineStart + Encoding.UTF8.GetByteCount(sSubLine);
         }
+
         public long GetLineStartByteOffset(int line)
         {
             if (line < 0) return 0;
-            if (line >= m_listLineStartOffsets.Count)
+            if (line >= m_blocks.GetLineCount())
                 return m_nLength;
 
-            return m_listLineStartOffsets[line] + m_listLineDeltaOffsets.QueryExclusive(line);
+            return m_blocks.GetLineStartOffset(line);
         }
+
         public long GetLineEndByteOffset(int line)
         {
             if (line + 1 < m_nLineCount)
                 return GetLineStartByteOffset(line + 1);
             return m_nLength;
         }
+
         public byte[] ReadRangeBytes(long pos, int byteCount)
         {
             if (byteCount <= 0 || pos < 0 || pos >= m_nLength)
@@ -257,7 +263,7 @@ namespace TextEditer
             {
                 long cur = 0;
 
-                foreach (var p in m_listPieces)
+                foreach (cPiece p in m_listPieces)
                 {
                     long next = cur + p.Length;
 
@@ -416,8 +422,10 @@ namespace TextEditer
         }
         public void RebuildLineIndex()
         {
-            m_listLineStartOffsets = BuildLineIndex();
-            m_listLineDeltaOffsets = new cLineDeltaFenwick(m_listLineStartOffsets.Count);
+            BuildLineIndex();
+            m_blocks.BuildFromDocumemt(m_nLength, this);
+            // m_listLineStartOffsets = BuildLineIndex();
+            // m_listLineDeltaOffsets = new cLineDeltaFenwick(m_listLineStartOffsets.Count);
         }
         private List<long> BuildLineIndex()
         {
@@ -475,13 +483,7 @@ namespace TextEditer
 
             return list;
         }
-        private void RealignLineOffset(int line, int addedBytes)
-        {
-            for(int i = line + 1; i < m_listLineStartOffsets.Count; i++)
-            {
-                m_listLineStartOffsets[i] += addedBytes;
-            }
-        }
+
         private void FindPieceAt(long pos, out int pieceIndex, out int innerOffset)
         {
             // pos는 문서 전체(바이트) 오프셋
