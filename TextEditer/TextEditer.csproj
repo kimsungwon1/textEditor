@@ -47,8 +47,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Custom\cLineBlock.cs" />
-    <Compile Include="Custom\cLineDeltaFenwick.cs" />
     <Compile Include="Custom\cPiece.cs" />
     <Compile Include="Custom\TextBuffer.cs" />
     <Compile Include="Custom\VirtualTextEditer.cs">

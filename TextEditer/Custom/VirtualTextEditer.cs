@@ -466,7 +466,7 @@ namespace TextEditer
         }
         public void EnterKeyPressed(int nLine, ref TextCursor cursor)
         {
-            const string sNewLine = "\r";
+            const string sNewLine = "\n";
 
             m_buffer.InsertUtf8(cursor.Line, cursor.ByteOffset, sNewLine);
 
@@ -534,6 +534,10 @@ namespace TextEditer
                 for (int i = 0; i < visible; i++)
                 {
                     int lineIndex = firstLine + i;
+                    if (i == 0)
+                    {
+                        m_buffer.SetCachedStartLine(lineIndex, visible);
+                    }
                     if (lineIndex >= m_buffer.m_nLineCount)
                         break;
 

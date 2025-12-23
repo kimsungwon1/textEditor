@@ -10,6 +10,17 @@ using System.Windows.Forms;
 
 namespace TextEditer
 {
+    public class LineScanCache
+    {
+        public LineScanCache(int offsets)
+        {
+            listScannedPos = new List<long>(offsets);
+        }
+
+        public List<long> listScannedPos;
+        public int ScannedLineStart;
+        public int ScannedLineCount;
+    }
     public class ITextBuffer : IDisposable
     {
         private FileStream m_fileStream;
@@ -20,12 +31,14 @@ namespace TextEditer
         List<long> m_listLineStartOffsets;
         private Dictionary<int, List<cPiece>> m_dicPiecesAtLine;
 
+        LineScanCache m_lineScanCache;
 
         public long m_nLength { get; private set; }
-        public int m_nLineCount => m_listLineStartOffsets.Count; // m_blocks.GetLineCount();// m_listLineStartOffsets.Count;
+        public int m_nLineCount => m_listLineStartOffsets.Count;
 
         private string m_currentPath;
         private string m_snapshotPath;
+
 
         public ITextBuffer()
         {
@@ -243,9 +256,11 @@ namespace TextEditer
                 }
             }
         }
-        public int GetSumOffsetTillLine(int originalLine, out int afterLine)
+        public int GetSumOffsetTillLine(int originalLine, out int afterLine, out int nLineBreaks, out List<(int, cPiece)> pieceList)
         {
             int addOffset = 0;
+            int lineBreaks = 0;
+            List<(int, cPiece)> pieces = new List<(int, cPiece)>();
             foreach (var item in m_dicPiecesAtLine)
             {
                 if (item.Key < originalLine)
@@ -259,6 +274,9 @@ namespace TextEditer
                             if (piece.LineBreaks > 0)
                             {
                                 originalLine -= piece.LineBreaks;
+                                lineBreaks += piece.LineBreaks;
+
+                                pieces.Add((item.Key , pieceToAdd));
                             }
                         }
                         else
@@ -268,74 +286,165 @@ namespace TextEditer
                             if (piece.LineBreaks > 0)
                             {
                                 originalLine += piece.LineBreaks;
+                                lineBreaks -= piece.LineBreaks;
+
+                                pieces.Add((item.Key, pieceToRemove));
                             }
                         }
                     }
                 }
             }
             afterLine = originalLine;
+            nLineBreaks = lineBreaks;
+            pieceList = pieces;
             return addOffset;
         }
-        public long GetLineStartByteOffset(int line)
+        public int GetSumOffsetTillLine(int originalLine)
         {
-            int afterLine;
-            int addOffset = GetSumOffsetTillLine(line, out afterLine);
-            if (afterLine < 0) return 0;
-
-            if (afterLine >= m_listLineStartOffsets.Count)
-                return m_nLength + addOffset;
-
-            return m_listLineStartOffsets[afterLine] + addOffset;
+            int addOffset = 0;
+            int lineBreaks = 0;
+            foreach (var item in m_dicPiecesAtLine)
+            {
+                if (item.Key < originalLine)
+                {
+                    foreach (cPiece piece in item.Value)
+                    {
+                        if (piece.IsAdd)
+                        {
+                            cPieceToAdd pieceToAdd = (cPieceToAdd)piece;
+                            addOffset += pieceToAdd.Content.Length;
+                            if (piece.LineBreaks > 0)
+                            {
+                                originalLine -= piece.LineBreaks;
+                                lineBreaks += piece.LineBreaks;
+                            }
+                        }
+                        else
+                        {
+                            cPieceToRemove pieceToRemove = (cPieceToRemove)piece;
+                            addOffset -= pieceToRemove.CountToRemove;
+                            if (piece.LineBreaks > 0)
+                            {
+                                originalLine += piece.LineBreaks;
+                                lineBreaks -= piece.LineBreaks;
+                            }
+                        }
+                    }
+                }
+            }
+            return addOffset;
         }
-        public long FindLineStartOffset(int targetLine)
+        public void SetCachedStartLine(int nLine, int count)
         {
-            if (targetLine <= 0)
-                return 0;
-
-            long offset = 0;
+            m_lineScanCache.ScannedLineStart = nLine;
+            m_lineScanCache.ScannedLineCount = count;
+        }
+        public long GetLineStartByteOffset(int targetLine)
+        {
+            long pos = 0;
             int line = 0;
-            const int CHUNK = 4096;
+            const int BUFFER = 4096;
 
+            if(m_lineScanCache != null && m_lineScanCache.ScannedLineStart <= targetLine && targetLine < m_lineScanCache.ScannedLineStart + m_lineScanCache.ScannedLineCount)
+            {
+                if(m_lineScanCache.ScannedLineStart < m_lineScanCache.listScannedPos.Count)
+                {
+                    line = m_lineScanCache.ScannedLineStart;
+                    pos = m_lineScanCache.listScannedPos[m_lineScanCache.ScannedLineStart];
+                }
+                else if(m_lineScanCache.ScannedLineStart >= m_lineScanCache.listScannedPos.Count)
+                {
+                    line = m_lineScanCache.listScannedPos.Count - 1;
+                    pos = m_lineScanCache.listScannedPos.Last();
+                }
+                
+            }
             while (true)
             {
-                byte[] buf = ReadRawBytes(offset, CHUNK); // ⭐ 라인 인자 없음
+                byte[] readByte = ReadRangeVirtualBytes(pos, BUFFER);
 
-                if (buf.Length == 0)
-                    return m_nLength;
-
-                for (int i = 0; i < buf.Length; i++)
+                if(targetLine == 0)
                 {
-                    if (buf[i] == (byte)'\n')
+                    pos = 0;
+                    m_lineScanCache.ScannedLineStart = 0;
+                    return 0;
+                }
+                for(int i = 0; i < readByte.Length; i++)
+                {
+                    if (readByte[i] == '\n')
                     {
                         line++;
+                        if(m_lineScanCache.ScannedLineStart + m_lineScanCache.ScannedLineCount <= line)
+                        {
+                            return -1;
+                        }
+
+                        long dwAnswer = pos + i + 1;
+                        if (line >= m_lineScanCache.listScannedPos.Count)
+                        {
+                            m_lineScanCache.listScannedPos.Add(dwAnswer);
+                        }
+                        else
+                        {
+                            m_lineScanCache.listScannedPos[line] = dwAnswer;
+                        }
+
                         if (line == targetLine)
-                            return offset + i + 1;
+                        {
+                            return dwAnswer;
+                        }
                     }
                 }
 
-                offset += buf.Length;
+                pos += readByte.Length;
             }
         }
-        public string GetLineUtf8(int nLine)
+        
+        public string ReadLine(int nLine)
         {
             long dwStart = GetLineStartByteOffset(nLine);
-            long dwEnd = (nLine + 1 < m_nLineCount)
-                ? GetLineStartByteOffset(nLine + 1)
-                : m_nLength;
+            long dwEnd = (nLine + 1 < m_nLineCount) ? GetLineStartByteOffset(nLine + 1) : m_nLength;
+
+            if(dwStart == -1 || dwEnd == -1)
+            {
+                return "";
+            }
 
             int nLen = (int)(dwEnd - dwStart);
             if (nLen <= 0) return "";
 
-            string line = ReadRangeUtf8(nLine, dwStart, nLen);
-            if (line.EndsWith("\n"))
-                line = line.Substring(0, line.Length - 1);
-            return line;
+            string sLine = ReadRangeUtf8(nLine, dwStart, nLen);
+
+            int index = 0;
+            for(; index < sLine.Length; index++)
+            {
+                char perChar = sLine[index];
+                if(perChar == '\n')
+                {
+                    break;
+                }
+            }
+            if(index == sLine.Length - 1)
+            {
+                return sLine;
+            }
+            else
+            {
+                string subLine = sLine.Substring(0, index);
+                return subLine;
+            }
         }
+
+        public string GetLineUtf8(int nLine)
+        {
+            return ReadLine(nLine);
+        }
+
         public string ReadRangeUtf8(int nLine, long dwPos, int nByteCount)
         {
             if (nByteCount <= 0 || dwPos < 0 || dwPos >= m_nLength) return string.Empty;
             long dwEndPos = Math.Min(m_nLength, dwPos + nByteCount);
-            int sumOffsets = GetSumOffsetTillLine(nLine, out int afterLine);
+            int sumOffsets = GetSumOffsetTillLine(nLine);
 
             using (MemoryStream ms = new MemoryStream(nByteCount))
             {
@@ -386,14 +495,9 @@ namespace TextEditer
                         else
                         {
                             cPieceToRemove rem = piece as cPieceToRemove;
-
-                            int skip = (int)Math.Min(
-                                rem.CountToRemove,
-                                dwEndPos - docPos
-                            );
-
+                            
+                            int skip = rem.CountToRemove;
                             srcPos += skip;
-                            // docPos += skip;
                         }
                     }
                 }
@@ -410,39 +514,78 @@ namespace TextEditer
                 return Encoding.UTF8.GetString(ms.ToArray());
             }
         }
-
-        public int GetLineLength(int nIndex)
+        public byte[] ReadRangeVirtualBytes(long dwPos, int nByteCount)
         {
-            return GetLineUtf8(nIndex).Length;
+            List<cPiece> pieces = new List<cPiece>();
+            foreach(var tuple in m_dicPiecesAtLine)
+            {
+                foreach(cPiece piece in tuple.Value)
+                {
+                    pieces.Add(piece);
+                }
+            }
+            long dwEndPos = Math.Min(m_nLength, dwPos + nByteCount);
+            long docPos = dwPos;
+            long srcPos = dwPos;
+            using (MemoryStream ms = new MemoryStream(nByteCount))
+            {
+                foreach (cPiece piece in pieces.OrderBy(p => p.Start))
+                {
+                    if (piece.Start >= dwEndPos)
+                        break;
+
+                    if (docPos < piece.Start)
+                    {
+                        long toRead = Math.Min(piece.Start - docPos, dwEndPos - dwPos);
+                        if (toRead > 0)
+                        {
+                            byte[] buf = new byte[toRead];
+                            m_memoryMappedViewAccessor.ReadArray(srcPos, buf, 0, (int)toRead);
+                            ms.Write(buf, 0, (int)toRead);
+
+                            docPos += toRead;
+                            srcPos += toRead;
+                        }
+                    }
+
+                    if (docPos >= dwEndPos)
+                        break;
+
+                    if (piece is cPieceToAdd add)
+                    {
+                        byte[] addBytes = Encoding.UTF8.GetBytes(add.Content);
+
+                        int writable = addBytes.Length;
+                        ms.Write(addBytes, 0, writable);
+                        docPos += writable;
+                    }
+                    else if (piece is cPieceToRemove rem)
+                    {
+                        int skip = rem.CountToRemove;
+
+                        srcPos += skip;
+                    }
+                }
+                
+                if (docPos < dwEndPos)
+                {
+                    long remain = dwEndPos - docPos;
+                    byte[] buf = new byte[remain];
+                    m_memoryMappedViewAccessor.ReadArray(srcPos, buf, 0, (int)remain);
+                    ms.Write(buf, 0, (int)remain);
+                }
+                return ms.ToArray();
+            }
+            
+
         }
-        public long GetIndex(int nLineIndex, int nColumn)
-        {
-            long dwLineStart = GetLineStartByteOffset(nLineIndex);
-            if (nColumn <= 0)
-                return dwLineStart;
-
-            string sLine = GetLineUtf8(nLineIndex);
-
-            if (nColumn >= sLine.Length)
-                return dwLineStart + Encoding.UTF8.GetByteCount(sLine);
-
-            string sSubLine = sLine.Substring(0, nColumn);
-            return dwLineStart + Encoding.UTF8.GetByteCount(sSubLine);
-        }
-        public long GetLineEndByteOffset(int line)
-        {
-            if (line + 1 < m_nLineCount)
-                return GetLineStartByteOffset(line + 1);
-            return m_nLength;
-        }
-
         public byte[] ReadRangeBytes(int nLine, long pos, int byteCount)
         {
             if (byteCount <= 0 || pos < 0 || pos >= m_nLength)
                 return Array.Empty<byte>();
 
             long endPos = Math.Min(m_nLength, pos + byteCount);
-            int sumOffsets = GetSumOffsetTillLine(nLine, out int afterLine);
+            int sumOffsets = GetSumOffsetTillLine(nLine);
 
             using (MemoryStream ms = new MemoryStream(byteCount))
             {
@@ -481,13 +624,10 @@ namespace TextEditer
                         // Add Piece
                         if (piece.IsAdd)
                         {
-                            var add = (cPieceToAdd)piece;
+                            cPieceToAdd add = (cPieceToAdd)piece;
                             byte[] addBytes = Encoding.UTF8.GetBytes(add.Content);
 
-                            int writable = (int)Math.Min(
-                                addBytes.Length,
-                                endPos - docPos
-                            );
+                            int writable = addBytes.Length;
 
                             ms.Write(addBytes, 0, writable);
                             docPos += writable;
@@ -495,12 +635,9 @@ namespace TextEditer
                         // Remove Piece
                         else
                         {
-                            var rem = (cPieceToRemove)piece;
+                            cPieceToRemove rem = (cPieceToRemove)piece;
 
-                            int skip = (int)Math.Min(
-                                rem.CountToRemove,
-                                endPos - docPos
-                            );
+                            int skip = rem.CountToRemove;
 
                             srcPos += skip;
                             // docPos += skip;
@@ -520,6 +657,32 @@ namespace TextEditer
                 return ms.ToArray();
             }
         }
+        public int GetLineLength(int nIndex)
+        {
+            return GetLineUtf8(nIndex).Length;
+        }
+        public long GetIndex(int nLineIndex, int nColumn)
+        {
+            long dwLineStart = GetLineStartByteOffset(nLineIndex);
+            if (nColumn <= 0)
+                return dwLineStart;
+
+            string sLine = GetLineUtf8(nLineIndex);
+
+            if (nColumn >= sLine.Length)
+                return dwLineStart + Encoding.UTF8.GetByteCount(sLine);
+
+            string sSubLine = sLine.Substring(0, nColumn);
+            return dwLineStart + Encoding.UTF8.GetByteCount(sSubLine);
+        }
+        public long GetLineEndByteOffset(int line)
+        {
+            if (line + 1 < m_nLineCount)
+                return GetLineStartByteOffset(line + 1);
+            return m_nLength;
+        }
+
+        
         public byte[] ReadRawBytes(long pos, int byteCount)
         {
             if (byteCount <= 0 || pos < 0 || pos >= m_nLength)
@@ -640,6 +803,8 @@ namespace TextEditer
         public void RebuildLineIndex()
         {
             m_listLineStartOffsets = BuildLineIndex();
+            m_lineScanCache = new LineScanCache(m_listLineStartOffsets.Count);
+            m_lineScanCache.listScannedPos.Add(0);
         }
         private List<long> BuildLineIndex()
         {
