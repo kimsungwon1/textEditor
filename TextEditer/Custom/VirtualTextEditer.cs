@@ -534,7 +534,7 @@ namespace TextEditer
                 for (int i = 0; i < visible; i++)
                 {
                     int lineIndex = firstLine + i;
-                    if (i == 0 && m_buffer.IsCachReflected())
+                    if (i == 0)
                     {
                         m_buffer.SetCachedStartLine(lineIndex, visible);
                     }

@@ -131,8 +131,6 @@ namespace TextEditer
                 foundPiece.Merge(newPiece, dwPos - foundPiece.Start, out bMasterAlive, out bNewOneAlive);
             }
 
-            m_lineScanCache.bChangeReflected = false;
-
             if (!bMasterAlive)
             {
                 DeletePiece(nLine, foundPiece);
@@ -143,6 +141,8 @@ namespace TextEditer
             }
 
             ShiftPiecesAfter(nLine, dwPos, bytes.Length);
+
+            m_lineScanCache.InvalidateFromLine(nLine);
 
             m_dwLength += bytes.Length;
         }
@@ -163,6 +163,7 @@ namespace TextEditer
             bool bMasterAlive = true;
             bool bNewOneAlive = true;
 
+
             if(foundPiece != null)
             {
                 foundPiece.Merge(newPiece, dwPos - foundPiece.Start, out bMasterAlive, out bNewOneAlive);
@@ -178,6 +179,8 @@ namespace TextEditer
             }
 
             ShiftPiecesAfter(nLine, dwPos, -nByteCount);
+
+            m_lineScanCache.InvalidateFromLine(nLine);
 
             m_dwLength -= nByteCount;
         }
@@ -328,74 +331,58 @@ namespace TextEditer
         {
             m_lineScanCache.SetLineAndCount(nLine, count);
         }
-        public bool IsCachReflected()
-        {
-            return m_lineScanCache.bChangeReflected;
-        }
-        public long GetLineStartByteOffset(int targetLine)
-        {
-            long pos = 0;
-            int line = 0;
-            const int BUFFER = 4096;
 
-            m_lineScanCache.PeekLineAndPos(targetLine, out pos, out line);
-
-            if(m_lineScanCache.bChangeReflected)
+        private void ScanUntilLine(int targetLine)
+        {
+            int line = m_lineScanCache.MaxCachedLine;
+            if (line < 0)
             {
-                if(m_lineScanCache.listScannedPos.Count > targetLine)
-                    return m_lineScanCache.listScannedPos[targetLine];
+                // 초기 상태
+                m_lineScanCache.listScannedPos.Clear();
+                m_lineScanCache.listScannedPos.Add(0);
+                line = 0;
             }
 
-            while (true)
+            long pos = m_lineScanCache.listScannedPos[line];
+            const int BUFFER = 4096;
+
+            while (line < targetLine)
             {
                 byte[] readByte = ReadRangeVirtualBytes(pos, BUFFER);
-                if (readByte.Length == 0 || m_dwLength < pos)
-                    return -1;
+                if (readByte.Length == 0)
+                    return;
 
-                if(targetLine == 0)
-                {
-                    pos = 0;
-                    m_lineScanCache.ScannedLineStart = 0;
-                    return 0;
-                }
-                for(int i = 0; i < readByte.Length; i++)
+                for (int i = 0; i < readByte.Length && line < targetLine; i++)
                 {
                     if (readByte[i] == '\n')
                     {
+                        long nextLineStart = pos + i + 1;
                         line++;
-                        if(m_lineScanCache.ScannedLineStart + m_lineScanCache.ScannedLineCount < line)
-                        {
-                            if (targetLine == m_lineScanCache.ScannedLineStart + m_lineScanCache.ScannedLineCount)
-                            {
-                                m_lineScanCache.bChangeReflected = true;
-                            }
-                            return -1;
-                        }
 
-                        long dwAnswer = pos + i + 1;
-                        if (line >= m_lineScanCache.listScannedPos.Count)
-                        {
-                            m_lineScanCache.listScannedPos.Add(dwAnswer);
-                        }
-                        else
-                        {
-                            m_lineScanCache.listScannedPos[line] = dwAnswer;
-                        }
-                        
-
-                        if (line == targetLine)
-                        {
-                            if(targetLine == m_lineScanCache.ScannedLineStart + m_lineScanCache.ScannedLineCount)
-                            {
-                                m_lineScanCache.bChangeReflected = true;
-                            }
-                            return dwAnswer;
-                        }
+                        m_lineScanCache.StoreLineStart(line, nextLineStart);
                     }
                 }
 
                 pos += readByte.Length;
             }
+        }
+        public long GetLineStartByteOffset(int targetLine)
+        {
+            if (targetLine == 0)
+                return 0;
+
+            // 1. 캐시에 있으면 바로 반환
+            if (m_lineScanCache.TryGetCachedLine(targetLine, out long pos))
+                return pos;
+
+            // 2. 없으면 스캔 요청
+            ScanUntilLine(targetLine);
+
+            // 3. 다시 캐시 확인
+            if (m_lineScanCache.TryGetCachedLine(targetLine, out pos))
+                return pos;
+
+            return -1;
         }
         
         public string ReadLine(int nLine)
@@ -444,36 +431,39 @@ namespace TextEditer
             long dwEndPos = Math.Min(m_dwLength, dwPos + nByteCount);
             int sumOffsets = GetSumOffsetTillLine(nLine);
 
+            List<cPiece> pieces = new List<cPiece>();
+            foreach (var tuple in m_dicPiecesAtLine)
+            {
+                foreach (cPiece piece in tuple.Value)
+                {
+                    pieces.Add(piece);
+                }
+            }
+
             using (MemoryStream ms = new MemoryStream(nByteCount))
             {
                 long docPos = dwPos;   // 문서 기준
                 long srcPos = dwPos - sumOffsets;   // 원본 기준
 
-                if (m_dicPiecesAtLine.TryGetValue(nLine, out List<cPiece> pieces))
+                foreach (cPiece piece in pieces.OrderBy(p => p.Start))
                 {
-                    foreach (cPiece piece in pieces.OrderBy(p => p.Start))
+                    if (piece.Start >= dwEndPos)
+                        break;
+
+                    // piece 전까지의 원본 구간
+                    if (docPos < piece.Start)
                     {
-                        if (piece.Start >= dwEndPos)
-                            break;
+                        int toRead = (int)Math.Min(
+                            piece.Start - docPos,
+                            dwEndPos - docPos
+                        );
 
-                        // piece 전까지의 원본 구간
-                        if (docPos < piece.Start)
-                        {
-                            int toRead = (int)Math.Min(
-                                piece.Start - docPos,
-                                dwEndPos - docPos
-                            );
+                        byte[] buf = new byte[toRead];
+                        m_memoryMappedViewAccessor.ReadArray(srcPos, buf, 0, toRead);
+                        ms.Write(buf, 0, toRead);
 
-                            byte[] buf = new byte[toRead];
-                            m_memoryMappedViewAccessor.ReadArray(srcPos, buf, 0, toRead);
-                            ms.Write(buf, 0, toRead);
-
-                            docPos += toRead;
-                            srcPos += toRead;
-                        }
-
-                        if (docPos >= dwEndPos)
-                            break;
+                        docPos += toRead;
+                        srcPos += toRead;
 
                         // Add Piece
                         if (piece.IsAdd)
@@ -493,13 +483,16 @@ namespace TextEditer
                         else
                         {
                             cPieceToRemove rem = piece as cPieceToRemove;
-                            
+
                             int skip = rem.CountToRemove;
                             srcPos += skip;
                         }
                     }
-                }
 
+                    if (docPos >= dwEndPos)
+                        break;
+                }
+                
                 // 남은 원본
                 if (docPos < dwEndPos)
                 {
@@ -548,25 +541,25 @@ namespace TextEditer
                         {
                             continue;
                         }
+
+                        if (piece is cPieceToAdd add)
+                        {
+                            byte[] addBytes = Encoding.UTF8.GetBytes(add.Content);
+
+                            int writable = addBytes.Length;
+                            ms.Write(addBytes, 0, writable);
+                            docPos += writable;
+                        }
+                        else if (piece is cPieceToRemove rem)
+                        {
+                            int skip = rem.CountToRemove;
+
+                            srcPos += skip;
+                        }
                     }
 
                     if (docPos >= dwEndPos)
                         break;
-
-                    if (piece is cPieceToAdd add)
-                    {
-                        byte[] addBytes = Encoding.UTF8.GetBytes(add.Content);
-
-                        int writable = addBytes.Length;
-                        ms.Write(addBytes, 0, writable);
-                        docPos += writable;
-                    }
-                    else if (piece is cPieceToRemove rem)
-                    {
-                        int skip = rem.CountToRemove;
-
-                        srcPos += skip;
-                    }
                 }
                 
                 if (docPos < dwEndPos)
@@ -618,32 +611,32 @@ namespace TextEditer
 
                             docPos += toRead;
                             srcPos += toRead;
+
+                            // Add Piece
+                            if (piece.IsAdd)
+                            {
+                                cPieceToAdd add = (cPieceToAdd)piece;
+                                byte[] addBytes = Encoding.UTF8.GetBytes(add.Content);
+
+                                int writable = addBytes.Length;
+
+                                ms.Write(addBytes, 0, writable);
+                                docPos += writable;
+                            }
+                            // Remove Piece
+                            else
+                            {
+                                cPieceToRemove rem = (cPieceToRemove)piece;
+
+                                int skip = rem.CountToRemove;
+
+                                srcPos += skip;
+                                // docPos += skip;
+                            }
                         }
 
                         if (docPos >= endPos)
                             break;
-
-                        // Add Piece
-                        if (piece.IsAdd)
-                        {
-                            cPieceToAdd add = (cPieceToAdd)piece;
-                            byte[] addBytes = Encoding.UTF8.GetBytes(add.Content);
-
-                            int writable = addBytes.Length;
-
-                            ms.Write(addBytes, 0, writable);
-                            docPos += writable;
-                        }
-                        // Remove Piece
-                        else
-                        {
-                            cPieceToRemove rem = (cPieceToRemove)piece;
-
-                            int skip = rem.CountToRemove;
-
-                            srcPos += skip;
-                            // docPos += skip;
-                        }
                     }
                 }
 
