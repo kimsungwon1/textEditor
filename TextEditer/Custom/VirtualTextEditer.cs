@@ -359,7 +359,7 @@ namespace TextEditer
             if (m_cursor.Line + 1 < m_buffer.m_nLineCount)
                 lineEnd = m_buffer.GetLineStartByteOffset(m_cursor.Line + 1);
             else
-                lineEnd = m_buffer.m_nLength;
+                lineEnd = m_buffer.m_dwLength;
 
             if (lineEnd < lineStart)
                 lineEnd = lineStart;
@@ -442,7 +442,7 @@ namespace TextEditer
 
         public void Delete(ref TextCursor cursor)
         {
-            if (cursor.ByteOffset >= m_buffer.m_nLength)
+            if (cursor.ByteOffset >= m_buffer.m_dwLength)
                 return;
 
             if (m_cursor.Line + 1 >= m_buffer.m_nLineCount)
@@ -534,7 +534,7 @@ namespace TextEditer
                 for (int i = 0; i < visible; i++)
                 {
                     int lineIndex = firstLine + i;
-                    if (i == 0)
+                    if (i == 0 && m_buffer.IsCachReflected())
                     {
                         m_buffer.SetCachedStartLine(lineIndex, visible);
                     }
@@ -691,7 +691,7 @@ namespace TextEditer
         }
         private int GetNewlineByteLength(int nLine, long byteOffset)
         {
-            if (byteOffset >= m_buffer.m_nLength)
+            if (byteOffset >= m_buffer.m_dwLength)
                 return 0;
             
             byte[] buf = m_buffer.ReadRangeBytes(nLine, byteOffset, 2);

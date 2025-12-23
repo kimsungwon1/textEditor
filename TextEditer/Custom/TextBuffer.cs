@@ -10,17 +10,6 @@ using System.Windows.Forms;
 
 namespace TextEditer
 {
-    public class LineScanCache
-    {
-        public LineScanCache(int offsets)
-        {
-            listScannedPos = new List<long>(offsets);
-        }
-
-        public List<long> listScannedPos;
-        public int ScannedLineStart;
-        public int ScannedLineCount;
-    }
     public class ITextBuffer : IDisposable
     {
         private FileStream m_fileStream;
@@ -31,15 +20,14 @@ namespace TextEditer
         List<long> m_listLineStartOffsets;
         private Dictionary<int, List<cPiece>> m_dicPiecesAtLine;
 
-        LineScanCache m_lineScanCache;
+        cLineScanCache m_lineScanCache;
 
-        public long m_nLength { get; private set; }
+        public long m_dwLength { get; private set; }
         public int m_nLineCount => m_listLineStartOffsets.Count;
 
         private string m_currentPath;
         private string m_snapshotPath;
-
-
+        
         public ITextBuffer()
         {
             // m_blocks = new cLineIndexBlocks(32);
@@ -92,7 +80,7 @@ namespace TextEditer
 
             m_dicPiecesAtLine.Clear();
 
-            m_nLength = m_dwOriginalLen;
+            m_dwLength = m_dwOriginalLen;
         }
         public void Save()
         {
@@ -120,7 +108,7 @@ namespace TextEditer
         public void InsertUtf8(int nLine, long dwPos, string sText)
         {
             if (dwPos < 0) dwPos = 0;
-            if (dwPos > m_nLength) dwPos = m_nLength;
+            if (dwPos > m_dwLength) dwPos = m_dwLength;
 
             byte[] bytes = Encoding.UTF8.GetBytes(sText);
 
@@ -143,6 +131,8 @@ namespace TextEditer
                 foundPiece.Merge(newPiece, dwPos - foundPiece.Start, out bMasterAlive, out bNewOneAlive);
             }
 
+            m_lineScanCache.bChangeReflected = false;
+
             if (!bMasterAlive)
             {
                 DeletePiece(nLine, foundPiece);
@@ -154,16 +144,16 @@ namespace TextEditer
 
             ShiftPiecesAfter(nLine, dwPos, bytes.Length);
 
-            m_nLength += bytes.Length;
+            m_dwLength += bytes.Length;
         }
         
         public void Delete(int nLine, long dwPos, int nByteCount, bool bLinesUpdate = false)
         {
-            if (nByteCount <= 0 || m_nLength == 0) return;
+            if (nByteCount <= 0 || m_dwLength == 0) return;
             if (dwPos < 0) dwPos = 0;
-            if (dwPos >= m_nLength) return;
+            if (dwPos >= m_dwLength) return;
 
-            long dwEndPos = Math.Min(m_nLength, dwPos + nByteCount);
+            long dwEndPos = Math.Min(m_dwLength, dwPos + nByteCount);
 
             // lineDeletedCount 계산.
             int lineBreakDeletedCount = 0;
@@ -189,7 +179,7 @@ namespace TextEditer
 
             ShiftPiecesAfter(nLine, dwPos, -nByteCount);
 
-            m_nLength -= nByteCount;
+            m_dwLength -= nByteCount;
         }
         private cPiece FindPieceAt(int lineIndex, long dwPos)
         {
@@ -336,8 +326,11 @@ namespace TextEditer
         }
         public void SetCachedStartLine(int nLine, int count)
         {
-            m_lineScanCache.ScannedLineStart = nLine;
-            m_lineScanCache.ScannedLineCount = count;
+            m_lineScanCache.SetLineAndCount(nLine, count);
+        }
+        public bool IsCachReflected()
+        {
+            return m_lineScanCache.bChangeReflected;
         }
         public long GetLineStartByteOffset(int targetLine)
         {
@@ -345,23 +338,19 @@ namespace TextEditer
             int line = 0;
             const int BUFFER = 4096;
 
-            if(m_lineScanCache != null && m_lineScanCache.ScannedLineStart <= targetLine && targetLine < m_lineScanCache.ScannedLineStart + m_lineScanCache.ScannedLineCount)
+            m_lineScanCache.PeekLineAndPos(targetLine, out pos, out line);
+
+            if(m_lineScanCache.bChangeReflected)
             {
-                if(m_lineScanCache.ScannedLineStart < m_lineScanCache.listScannedPos.Count)
-                {
-                    line = m_lineScanCache.ScannedLineStart;
-                    pos = m_lineScanCache.listScannedPos[m_lineScanCache.ScannedLineStart];
-                }
-                else if(m_lineScanCache.ScannedLineStart >= m_lineScanCache.listScannedPos.Count)
-                {
-                    line = m_lineScanCache.listScannedPos.Count - 1;
-                    pos = m_lineScanCache.listScannedPos.Last();
-                }
-                
+                if(m_lineScanCache.listScannedPos.Count > targetLine)
+                    return m_lineScanCache.listScannedPos[targetLine];
             }
+
             while (true)
             {
                 byte[] readByte = ReadRangeVirtualBytes(pos, BUFFER);
+                if (readByte.Length == 0 || m_dwLength < pos)
+                    return -1;
 
                 if(targetLine == 0)
                 {
@@ -374,8 +363,12 @@ namespace TextEditer
                     if (readByte[i] == '\n')
                     {
                         line++;
-                        if(m_lineScanCache.ScannedLineStart + m_lineScanCache.ScannedLineCount <= line)
+                        if(m_lineScanCache.ScannedLineStart + m_lineScanCache.ScannedLineCount < line)
                         {
+                            if (targetLine == m_lineScanCache.ScannedLineStart + m_lineScanCache.ScannedLineCount)
+                            {
+                                m_lineScanCache.bChangeReflected = true;
+                            }
                             return -1;
                         }
 
@@ -388,9 +381,14 @@ namespace TextEditer
                         {
                             m_lineScanCache.listScannedPos[line] = dwAnswer;
                         }
+                        
 
                         if (line == targetLine)
                         {
+                            if(targetLine == m_lineScanCache.ScannedLineStart + m_lineScanCache.ScannedLineCount)
+                            {
+                                m_lineScanCache.bChangeReflected = true;
+                            }
                             return dwAnswer;
                         }
                     }
@@ -403,7 +401,7 @@ namespace TextEditer
         public string ReadLine(int nLine)
         {
             long dwStart = GetLineStartByteOffset(nLine);
-            long dwEnd = (nLine + 1 < m_nLineCount) ? GetLineStartByteOffset(nLine + 1) : m_nLength;
+            long dwEnd = (nLine + 1 < m_nLineCount) ? GetLineStartByteOffset(nLine + 1) : m_dwLength;
 
             if(dwStart == -1 || dwEnd == -1)
             {
@@ -442,8 +440,8 @@ namespace TextEditer
 
         public string ReadRangeUtf8(int nLine, long dwPos, int nByteCount)
         {
-            if (nByteCount <= 0 || dwPos < 0 || dwPos >= m_nLength) return string.Empty;
-            long dwEndPos = Math.Min(m_nLength, dwPos + nByteCount);
+            if (nByteCount <= 0 || dwPos < 0 || dwPos >= m_dwLength) return string.Empty;
+            long dwEndPos = Math.Min(m_dwLength, dwPos + nByteCount);
             int sumOffsets = GetSumOffsetTillLine(nLine);
 
             using (MemoryStream ms = new MemoryStream(nByteCount))
@@ -524,7 +522,7 @@ namespace TextEditer
                     pieces.Add(piece);
                 }
             }
-            long dwEndPos = Math.Min(m_nLength, dwPos + nByteCount);
+            long dwEndPos = Math.Min(m_dwLength, dwPos + nByteCount);
             long docPos = dwPos;
             long srcPos = dwPos;
             using (MemoryStream ms = new MemoryStream(nByteCount))
@@ -545,6 +543,10 @@ namespace TextEditer
 
                             docPos += toRead;
                             srcPos += toRead;
+                        }
+                        else
+                        {
+                            continue;
                         }
                     }
 
@@ -581,10 +583,10 @@ namespace TextEditer
         }
         public byte[] ReadRangeBytes(int nLine, long pos, int byteCount)
         {
-            if (byteCount <= 0 || pos < 0 || pos >= m_nLength)
+            if (byteCount <= 0 || pos < 0 || pos >= m_dwLength)
                 return Array.Empty<byte>();
 
-            long endPos = Math.Min(m_nLength, pos + byteCount);
+            long endPos = Math.Min(m_dwLength, pos + byteCount);
             int sumOffsets = GetSumOffsetTillLine(nLine);
 
             using (MemoryStream ms = new MemoryStream(byteCount))
@@ -679,16 +681,16 @@ namespace TextEditer
         {
             if (line + 1 < m_nLineCount)
                 return GetLineStartByteOffset(line + 1);
-            return m_nLength;
+            return m_dwLength;
         }
 
         
         public byte[] ReadRawBytes(long pos, int byteCount)
         {
-            if (byteCount <= 0 || pos < 0 || pos >= m_nLength)
+            if (byteCount <= 0 || pos < 0 || pos >= m_dwLength)
                 return Array.Empty<byte>();
 
-            long endPos = Math.Min(m_nLength, pos + byteCount);
+            long endPos = Math.Min(m_dwLength, pos + byteCount);
             int len = (int)(endPos - pos);
 
             byte[] buf = new byte[len];
@@ -720,7 +722,7 @@ namespace TextEditer
 
         public int GetNextCharByteLength(int nLine, long byteOffset)
         {
-            if (byteOffset >= m_nLength)
+            if (byteOffset >= m_dwLength)
                 return 0;
 
             // 최대 4바이트면 UTF-8 문자 하나 충분
@@ -803,7 +805,7 @@ namespace TextEditer
         public void RebuildLineIndex()
         {
             m_listLineStartOffsets = BuildLineIndex();
-            m_lineScanCache = new LineScanCache(m_listLineStartOffsets.Count);
+            m_lineScanCache = new cLineScanCache(m_listLineStartOffsets.Count);
             m_lineScanCache.listScannedPos.Add(0);
         }
         private List<long> BuildLineIndex()
@@ -816,7 +818,7 @@ namespace TextEditer
             byte[] buffer = new byte[BUFFER_SIZE];
 
             long filePos = 0;
-            long length = m_nLength;
+            long length = m_dwLength;
 
             while (filePos < length)
             {
@@ -856,7 +858,7 @@ namespace TextEditer
             m_memoryMappedFile?.Dispose(); m_memoryMappedFile = null;
             m_fileStream?.Dispose(); m_fileStream = null;
 
-            m_nLength = 0;
+            m_dwLength = 0;
         }
         private void CloseSnapshotHandles()
         {
@@ -872,7 +874,7 @@ namespace TextEditer
             m_memoryMappedFile?.Dispose(); m_memoryMappedFile = null;
             m_fileStream?.Dispose(); m_fileStream = null;
 
-            m_nLength = 0;
+            m_dwLength = 0;
             m_dwOriginalLen = 0;
         }
     }
