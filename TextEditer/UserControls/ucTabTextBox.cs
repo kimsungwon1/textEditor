@@ -25,17 +25,11 @@ namespace TextEditer
             try
             {
                 InitializeComponent();
-                EventInitialize();
             }
             catch(Exception exception)
             {
                 cLogger.Instance.AddLog(eLogType.ERROR, exception);
             }
-        }
-
-        private void EventInitialize()
-        {
-            // this.rtbTextBox.TextChanged += new System.EventHandler(this.rtbTextBox_TextChanged);
         }
 
         public void LoadData(string sFilePath)
@@ -46,7 +40,7 @@ namespace TextEditer
 
                 m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
                 textEditer.LoadFile(sFilePath);
-                // rtbTextBox.OpenLargeFile(sFilePath); // LoadFile(sFilePath, RichTextBoxStreamType.PlainText);
+
                 nSaved = 1;
             }
             catch(Exception exception)
@@ -157,19 +151,7 @@ namespace TextEditer
                 return m_sFileName;
             }
         }
-
-        // public string sMainText
-        // {
-        //     get
-        //     {
-        //         return rtbTextBox.Text;
-        //     }
-        //     set
-        //     {
-        //         rtbTextBox.Text = value;
-        //     }
-        // }
-
+        
         private bool FileChanged_Apply()
         {
             try

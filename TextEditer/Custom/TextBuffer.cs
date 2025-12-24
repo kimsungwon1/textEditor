@@ -356,7 +356,9 @@ namespace TextEditer
                 {
                     if (readByte[i] == '\n')
                     {
-                        long nextLineStart = pos + i + 1;
+                        long nextLineStart;
+                        nextLineStart = pos + i + 1;
+                        
                         line++;
 
                         m_lineScanCache.StoreLineStart(line, nextLineStart);
@@ -368,9 +370,6 @@ namespace TextEditer
         }
         public long GetLineStartByteOffset(int targetLine)
         {
-            if (targetLine == 0)
-                return 0;
-
             // 1. 캐시에 있으면 바로 반환
             if (m_lineScanCache.TryGetCachedLine(targetLine, out long pos))
                 return pos;
@@ -409,13 +408,15 @@ namespace TextEditer
                     break;
                 }
             }
-            if(index == sLine.Length - 1)
+            if(index == sLine.Length - 1 || index == sLine.Length)
             {
                 return sLine;
             }
             else
             {
-                string subLine = sLine.Substring(0, index);
+                string lineToRemove = sLine.Substring(0, index);
+
+                string subLine = sLine.Remove(0, index + 1);
                 return subLine;
             }
         }
@@ -451,7 +452,7 @@ namespace TextEditer
                         break;
 
                     // piece 전까지의 원본 구간
-                    if (docPos < piece.Start)
+                    if (docPos <= piece.Start)
                     {
                         int toRead = (int)Math.Min(
                             piece.Start - docPos,
@@ -525,8 +526,10 @@ namespace TextEditer
                     if (piece.Start >= dwEndPos)
                         break;
 
+                    bool bPieceInsert = false;
                     if (docPos < piece.Start)
                     {
+                        bPieceInsert = true;
                         long toRead = Math.Min(piece.Start - docPos, dwEndPos - dwPos);
                         if (toRead > 0)
                         {
@@ -542,24 +545,34 @@ namespace TextEditer
                             continue;
                         }
 
-                        if (piece is cPieceToAdd add)
-                        {
-                            byte[] addBytes = Encoding.UTF8.GetBytes(add.Content);
-
-                            int writable = addBytes.Length;
-                            ms.Write(addBytes, 0, writable);
-                            docPos += writable;
-                        }
-                        else if (piece is cPieceToRemove rem)
-                        {
-                            int skip = rem.CountToRemove;
-
-                            srcPos += skip;
-                        }
+                        
                     }
 
                     if (docPos >= dwEndPos)
                         break;
+
+                    if (piece is cPieceToAdd add && (piece.LineBreaks == 0 || (piece.LineBreaks == 1 && bPieceInsert)))
+                    {
+                        byte[] addBytes = Encoding.UTF8.GetBytes(add.Content);
+
+                        if(piece.Start >= docPos && !bPieceInsert)
+                        {
+                            for(int i = 0; i < addBytes.Count(); i++)
+                            {
+                                addBytes[i] = (byte)'1';
+                            }
+                        }
+
+                        int writable = addBytes.Length;
+                        ms.Write(addBytes, 0, writable);
+                        // docPos += writable;
+                    }
+                    else if (piece is cPieceToRemove rem)
+                    {
+                        int skip = rem.CountToRemove;
+
+                        srcPos += skip;
+                    }
                 }
                 
                 if (docPos < dwEndPos)
