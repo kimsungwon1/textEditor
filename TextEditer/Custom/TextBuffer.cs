@@ -249,49 +249,7 @@ namespace TextEditer
                 }
             }
         }
-        public int GetSumOffsetTillLine(int originalLine, out int afterLine, out int nLineBreaks, out List<(int, cPiece)> pieceList)
-        {
-            int addOffset = 0;
-            int lineBreaks = 0;
-            List<(int, cPiece)> pieces = new List<(int, cPiece)>();
-            foreach (var item in m_dicPiecesAtLine)
-            {
-                if (item.Key < originalLine)
-                {
-                    foreach (cPiece piece in item.Value)
-                    {
-                        if (piece.IsAdd)
-                        {
-                            cPieceToAdd pieceToAdd = (cPieceToAdd)piece;
-                            addOffset += pieceToAdd.Content.Length;
-                            if (piece.LineBreaks > 0)
-                            {
-                                originalLine -= piece.LineBreaks;
-                                lineBreaks += piece.LineBreaks;
-
-                                pieces.Add((item.Key , pieceToAdd));
-                            }
-                        }
-                        else
-                        {
-                            cPieceToRemove pieceToRemove = (cPieceToRemove)piece;
-                            addOffset -= pieceToRemove.CountToRemove;
-                            if (piece.LineBreaks > 0)
-                            {
-                                originalLine += piece.LineBreaks;
-                                lineBreaks -= piece.LineBreaks;
-
-                                pieces.Add((item.Key, pieceToRemove));
-                            }
-                        }
-                    }
-                }
-            }
-            afterLine = originalLine;
-            nLineBreaks = lineBreaks;
-            pieceList = pieces;
-            return addOffset;
-        }
+        
         public int GetSumOffsetTillLine(int originalLine)
         {
             int addOffset = 0;
@@ -358,7 +316,7 @@ namespace TextEditer
                     {
                         long nextLineStart;
                         nextLineStart = pos + i + 1;
-                        
+
                         line++;
 
                         m_lineScanCache.StoreLineStart(line, nextLineStart);
@@ -383,13 +341,13 @@ namespace TextEditer
 
             return -1;
         }
-        
-        public string ReadLine(int nLine)
+
+        public string GetLineUtf8(int nLine)
         {
             long dwStart = GetLineStartByteOffset(nLine);
             long dwEnd = (nLine + 1 < m_nLineCount) ? GetLineStartByteOffset(nLine + 1) : m_dwLength;
 
-            if(dwStart == -1 || dwEnd == -1)
+            if (dwStart == -1 || dwEnd == -1)
             {
                 return "";
             }
@@ -397,18 +355,19 @@ namespace TextEditer
             int nLen = (int)(dwEnd - dwStart);
             if (nLen <= 0) return "";
 
+
             string sLine = ReadRangeUtf8(nLine, dwStart, nLen);
 
             int index = 0;
-            for(; index < sLine.Length; index++)
+            for (; index < sLine.Length; index++)
             {
                 char perChar = sLine[index];
-                if(perChar == '\n')
+                if (perChar == '\n')
                 {
                     break;
                 }
             }
-            if(index == sLine.Length - 1 || index == sLine.Length)
+            if (index == sLine.Length - 1 || index == sLine.Length)
             {
                 return sLine;
             }
@@ -421,9 +380,25 @@ namespace TextEditer
             }
         }
 
-        public string GetLineUtf8(int nLine)
+        public int GetFormerLineChangeInput()
         {
-            return ReadLine(nLine);
+            int lineChanges = 0;
+            
+            foreach (var tuple in m_dicPiecesAtLine)
+            {
+                foreach (cPiece piece in tuple.Value)
+                {
+                    if(piece.IsAdd)
+                    {
+                        lineChanges += piece.LineBreaks;
+                    }
+                    else
+                    {
+                        lineChanges -= piece.LineBreaks;
+                    }
+                }
+            }
+            return lineChanges;
         }
 
         public string ReadRangeUtf8(int nLine, long dwPos, int nByteCount)
@@ -584,8 +559,6 @@ namespace TextEditer
                 }
                 return ms.ToArray();
             }
-            
-
         }
         public byte[] ReadRangeBytes(int nLine, long pos, int byteCount)
         {
@@ -765,54 +738,11 @@ namespace TextEditer
             }
         }
         
-        public void Reset()
-        {
-            m_memoryMappedViewAccessor?.Dispose();
-            m_memoryMappedFile?.Dispose();
-            m_fileStream?.Dispose();
-
-            m_memoryMappedViewAccessor = null;
-            m_memoryMappedFile = null;
-            m_fileStream = null;
-        }
-
-        public void ResetWithNewContent(string sPath, byte[] fullText)
-        {
-            m_memoryMappedViewAccessor?.Dispose();
-            m_memoryMappedFile?.Dispose();
-            m_fileStream?.Dispose();
-
-            m_fileStream = new FileStream(
-                sPath,
-                FileMode.Create,
-                FileAccess.ReadWrite,
-                FileShare.ReadWrite
-            );
-
-            m_fileStream.Write(fullText, 0, fullText.Length);
-            m_fileStream.Flush();
-
-            m_dwOriginalLen = fullText.Length;
-
-            m_memoryMappedFile = MemoryMappedFile.CreateFromFile(
-                m_fileStream,
-                null,
-                m_dwOriginalLen,
-                MemoryMappedFileAccess.ReadWrite,
-                HandleInheritability.None,
-                false
-            );
-
-            m_memoryMappedViewAccessor =
-                m_memoryMappedFile.CreateViewAccessor(0, m_dwOriginalLen);
-
-            BuildLineIndex();
-        }
+        
         public void RebuildLineIndex()
         {
             m_listLineStartOffsets = BuildLineIndex();
             m_lineScanCache = new cLineScanCache(m_listLineStartOffsets.Count);
-            m_lineScanCache.listScannedPos.Add(0);
         }
         private List<long> BuildLineIndex()
         {

@@ -382,12 +382,14 @@ namespace TextEditer
             else if (m_cursor.Line >= m_vScroll.Value + visible)
                 m_vScroll.Value = Math.Min(m_vScroll.Maximum, m_cursor.Line - visible + 1);
         }
-        protected void InsertText(ref TextCursor cursor, string text)
+        
+        private void InsertText(ref TextCursor cursor, string text)
         {
             long pos = cursor.ByteOffset;
             byte[] bytes = Encoding.UTF8.GetBytes(text);
 
-            m_buffer.InsertUtf8(cursor.Line, pos, text);
+            int nLineChanges = m_buffer.GetFormerLineChangeInput();
+            m_buffer.InsertUtf8(cursor.Line + nLineChanges, pos, text);
 
             cursor.ByteOffset += bytes.Length;
 
@@ -468,7 +470,8 @@ namespace TextEditer
         {
             const string sNewLine = "\n";
 
-            m_buffer.InsertUtf8(cursor.Line, cursor.ByteOffset, sNewLine);
+            int nLineChanges = m_buffer.GetFormerLineChangeInput();
+            m_buffer.InsertUtf8(cursor.Line + nLineChanges, cursor.ByteOffset, sNewLine);
 
             // m_buffer.RebuildLineIndex();
 

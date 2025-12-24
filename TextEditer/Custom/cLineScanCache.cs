@@ -11,12 +11,15 @@ namespace TextEditer
         public cLineScanCache(int offsets)
         {
             listScannedPos = new List<long>(offsets);
+            listScannedPos.Add(0);
         }
         public bool bChangeReflected = true;
         public List<long> listScannedPos;
         public int ScannedLineStart;
         public int ScannedLineCount;
+
         public int MaxCachedLine => listScannedPos.Count - 1;
+
         public void SetLineAndCount(int nLine, int count)
         {
             if (ScannedLineStart != nLine || ScannedLineCount != count)
