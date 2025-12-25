@@ -58,7 +58,7 @@ namespace TextEditer
                 }
                 else
                 {
-                    textEditer.Save();
+                    // textEditer.Save();
                     m_dateTimeLastWrited = File.GetLastWriteTime(sFilePath);
                 }
             }
@@ -79,7 +79,7 @@ namespace TextEditer
                 {
                     sFileFullPath = dl.FileName;
                     nSaved = 1;
-                    textEditer.SaveAs(dl.FileName);
+                    // textEditer.SaveAs(dl.FileName);
                     
                     m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
                 }

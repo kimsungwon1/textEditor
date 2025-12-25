@@ -1,23 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
-namespace TextEditer
+namespace TextEditer.Custom
 {
-    public class ITextBuffer : IDisposable
+    public class MemoryMappedLineReader : IRawFileReader
     {
         private readonly MemoryMappedFile _mmf;
         private readonly MemoryMappedViewAccessor _accessor;
 
         public long Length { get; private set; }
 
-        public ITextBuffer(string path)
+        public MemoryMappedLineReader(string path)
         {
             var fi = new FileInfo(path);
             Length = fi.Length;
