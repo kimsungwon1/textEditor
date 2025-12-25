@@ -6,12 +6,12 @@ using System.Threading.Tasks;
 
 namespace TextEditer
 {
-    public static class LineIndexer
+    public static class cLineIndexer
     {
         // 한 번에 읽을 버퍼 크기 (너무 크면 캐시 미스, 너무 작으면 syscall 증가)
         private const int BufferSize = 64 * 1024; // 64KB
 
-        public static IEnumerable<LineSpan> Scan(ITextBuffer buffer)
+        public static IEnumerable<LineSpan> Scan(cTextBuffer buffer)
         {
             if (buffer == null)
                 throw new ArgumentNullException(nameof(buffer));

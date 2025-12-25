@@ -52,7 +52,6 @@
     <Compile Include="Custom\cPiece.cs" />
     <Compile Include="Custom\IRawFileReader.cs" />
     <Compile Include="Custom\LineIndexer.cs" />
-    <Compile Include="Custom\MemoryMappedLineReader.cs" />
     <Compile Include="Custom\TextBuffer.cs" />
     <Compile Include="Custom\VirtualTextEditer.cs">
       <SubType>UserControl</SubType>

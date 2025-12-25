@@ -129,8 +129,8 @@ namespace TextEditer
     public sealed class cDocument
     {
         private readonly List<cLineBlock> _blocks;
-        private ITextBuffer _buffer;
-        public cDocument(ITextBuffer buffer, IEnumerable<LineSpan> fileLines)
+        private cTextBuffer _buffer;
+        public cDocument(cTextBuffer buffer, IEnumerable<LineSpan> fileLines)
         {
             _blocks = new List<cLineBlock>();
 

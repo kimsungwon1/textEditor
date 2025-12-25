@@ -10,14 +10,14 @@ using System.Windows.Forms;
 
 namespace TextEditer
 {
-    public class ITextBuffer : IDisposable
+    public class cTextBuffer : IDisposable
     {
         private readonly MemoryMappedFile _mmf;
         private readonly MemoryMappedViewAccessor _accessor;
 
         public long Length { get; private set; }
 
-        public ITextBuffer(string path)
+        public cTextBuffer(string path)
         {
             var fi = new FileInfo(path);
             Length = fi.Length;

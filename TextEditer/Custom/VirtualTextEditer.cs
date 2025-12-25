@@ -61,8 +61,8 @@ namespace TextEditer
         // 파일 로드 (진입점)
         public void LoadFile(string path)
         {
-            var buffer = new ITextBuffer(path);
-            var lines = LineIndexer.Scan(buffer);
+            var buffer = new cTextBuffer(path);
+            var lines = cLineIndexer.Scan(buffer);
 
             _doc = new cDocument(buffer, lines);
 
@@ -236,7 +236,7 @@ namespace TextEditer
                         int.MaxValue,
                         sf).Width;
 
-                    if (mouseX < x + w/*x + w * 0.5f*/)
+                    if (mouseX < x + w)
                         return i;
                 }
             }
