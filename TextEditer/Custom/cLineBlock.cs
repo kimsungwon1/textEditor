@@ -169,6 +169,18 @@ namespace TextEditer
                 _blocks.Add(new cLineBlock(startLine, temp));
             }
         }
+
+        private string EnsureEditableText(cLineRef line)
+        {
+            if (line.IsDirty)
+                return line.EditedText ?? string.Empty;
+
+            string text = _buffer.ReadUtf8(line.FileSpan.Offset, line.FileSpan.ByteLength);
+
+            line.MakeDirty(text);
+            return text;
+        }
+
         private cLineBlock FindBlock(int globalLine, out int innerIndex)
         {
             int left = 0;
@@ -315,7 +327,7 @@ namespace TextEditer
             if (column > 0)
             {
                 var line = block.Lines[inner];
-                string text = line.EditedText;
+                string text = EnsureEditableText(line);
                 line.MakeDirty(text.Remove(column - 1, 1));
                 return;
             }
@@ -327,11 +339,11 @@ namespace TextEditer
             int prevInner;
             var prevBlock = FindBlock(globalLine - 1, out prevInner);
 
-            var cur = block.Lines[inner];
-            var prev = prevBlock.Lines[prevInner];
+            cLineRef cur = block.Lines[inner];
+            cLineRef prev = prevBlock.Lines[prevInner];
 
-            string curText = cur.EditedText;
-            string prevText = prev.EditedText;
+            string curText = EnsureEditableText(cur);// cur.EditedText;
+            string prevText = EnsureEditableText(prev);// prev.EditedText;
 
             prev.MakeDirty(prevText + curText);
             block.Lines.RemoveAt(inner);
@@ -347,32 +359,40 @@ namespace TextEditer
             var block = FindBlock(globalLine, out inner);
             var line = block.Lines[inner];
 
-            string text = line.EditedText;
+            string text = EnsureEditableText(line);// line.EditedText;
 
             // 줄 내부
-            if (column < text.Length)
+            if (!string.IsNullOrEmpty(text) && column < text.Length)
             {
                 line.MakeDirty(text.Remove(column, 1));
                 return;
             }
 
-            // 다음 줄 병합
-            if (globalLine + 1 >= LineCount)
-                return;
+            if(column == text.Length)
+            {
+                // 다음 줄 병합
+                if (globalLine + 1 >= LineCount)
+                    return;
 
-            int nextInner;
-            var nextBlock = FindBlock(globalLine + 1, out nextInner);
-            var next = nextBlock.Lines[nextInner];
+                int nextInner;
+                cLineBlock nextBlock = FindBlock(globalLine + 1, out nextInner);
+                cLineRef next = nextBlock.Lines[nextInner];
 
-            string nextText = next.EditedText;
+                string nextText = EnsureEditableText(next);
 
-            line.MakeDirty(text + nextText);
-            nextBlock.Lines.RemoveAt(nextInner);
+                line.MakeDirty(text + nextText);
+                nextBlock.Lines.RemoveAt(nextInner);
 
-            if (nextBlock.LineCount == 0)
-                _blocks.Remove(nextBlock);
+                if (nextBlock.LineCount == 0)
+                    _blocks.Remove(nextBlock);
 
-            MergeIfNeeded(_blocks.IndexOf(block));
+                MergeIfNeeded(_blocks.IndexOf(block));
+            }
+            else if(column < text.Length)
+            {
+                string newText = text.Remove(column, 1);
+                line.MakeDirty(newText);
+            }
         }
     }
 }
