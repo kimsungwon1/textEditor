@@ -19,19 +19,19 @@ namespace TextEditer
     }
     public class VirtualTextEditer : UserControl
     {
-        private cDocument _doc;
+        private cDocument m_document;
 
-        private VScrollBar _vScroll;
+        private VScrollBar m_vScroll;
 
-        private TextCursor _cursor;
+        private TextCursor m_cursor;
 
-        private readonly Font _font = new Font("Consolas", 10);
-        private readonly int _lineHeight = 16;
+        private readonly Font m_font = new Font("Consolas", 10);
+        private readonly int m_nLineHeight = 16;
 
-        private readonly Timer _caretTimer;
-        private bool _caretVisible = true;
+        private readonly Timer m_caretTimer;
+        private bool m_bCaretVisible = true;
 
-        private const int TextPaddingLeft = 4;
+        private const int m_nTextPaddingLeft = 4;
 
         public VirtualTextEditer()
         {
@@ -49,26 +49,26 @@ namespace TextEditer
             ForeColor = Color.Black;
             TabStop = true;
 
-            _caretTimer = new Timer { Interval = 500 };
-            _caretTimer.Tick += (_, __) =>
+            m_caretTimer = new Timer { Interval = 500 };
+            m_caretTimer.Tick += (_, __) =>
             {
-                _caretVisible = !_caretVisible;
+                m_bCaretVisible = !m_bCaretVisible;
                 Invalidate();
             };
-            _caretTimer.Start();
+            m_caretTimer.Start();
         }
 
         // 파일 로드 (진입점)
         public void LoadFile(string path)
         {
-            var buffer = new cTextBuffer(path);
-            var lines = cLineIndexer.Scan(buffer);
+            cTextBuffer buffer = new cTextBuffer(path);
+            IEnumerable<LineSpan> lines = cLineIndexer.Scan(buffer);
 
-            _doc = new cDocument(buffer, lines);
+            m_document = new cDocument(buffer, lines);
 
-            _cursor.Line = 0;
-            _cursor.Column = 0;
-            _cursor.PreferredX = 0;
+            m_cursor.Line = 0;
+            m_cursor.Column = 0;
+            m_cursor.PreferredX = 0;
 
             EnsureScroll();
             UpdateScrollBar();
@@ -79,30 +79,30 @@ namespace TextEditer
         // Scroll
         private void EnsureScroll()
         {
-            if (_vScroll != null) return;
+            if (m_vScroll != null) return;
 
-            _vScroll = new VScrollBar
+            m_vScroll = new VScrollBar
             {
                 Dock = DockStyle.Right,
                 SmallChange = 1
             };
-            _vScroll.Scroll += (_, __) => Invalidate();
-            Controls.Add(_vScroll);
+            m_vScroll.Scroll += (_, __) => Invalidate();
+            Controls.Add(m_vScroll);
         }
 
         private void UpdateScrollBar()
         {
-            if (_doc == null || _vScroll == null) return;
+            if (m_document == null || m_vScroll == null) return;
 
-            int visible = Math.Max(1, ClientSize.Height / _lineHeight);
-            int total = _doc.LineCount;
+            int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
+            int total = m_document.LineCount;
 
             int maxFirst = Math.Max(0, total - visible);
 
-            _vScroll.Minimum = 0;
-            _vScroll.LargeChange = visible;
-            _vScroll.Maximum = maxFirst + visible;
-            _vScroll.Value = Math.Min(_vScroll.Value, maxFirst);
+            m_vScroll.Minimum = 0;
+            m_vScroll.LargeChange = visible;
+            m_vScroll.Maximum = maxFirst + visible;
+            m_vScroll.Value = Math.Min(m_vScroll.Value, maxFirst);
         }
 
         // Paint
@@ -111,7 +111,7 @@ namespace TextEditer
             base.OnPaint(e);
             e.Graphics.Clear(BackColor);
 
-            if (_doc == null || _vScroll == null)
+            if (m_document == null || m_vScroll == null)
                 return;
 
             DrawText(e.Graphics);
@@ -120,12 +120,12 @@ namespace TextEditer
 
         private void DrawText(Graphics g)
         {
-            int firstLine = _vScroll.Value;
-            int visible = Math.Max(1, ClientSize.Height / _lineHeight);
+            int firstLine = m_vScroll.Value;
+            int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
 
             Color textColor = Color.Black;
-            using (var brush = new SolidBrush(ForeColor))
-            using (var sf = new StringFormat(StringFormat.GenericTypographic)
+            using (SolidBrush brush = new SolidBrush(ForeColor))
+            using (StringFormat sf = new StringFormat(StringFormat.GenericTypographic)
             {
                 FormatFlags = StringFormatFlags.MeasureTrailingSpaces
             })
@@ -133,17 +133,17 @@ namespace TextEditer
                 for (int i = 0; i < visible; i++)
                 {
                     int lineIndex = firstLine + i;
-                    if (lineIndex >= _doc.LineCount)
+                    if (lineIndex >= m_document.LineCount)
                         break;
 
-                    string text = _doc.GetLineText(lineIndex);
+                    string text = m_document.GetLineText(lineIndex);
 
                     g.DrawString(
                         text,
-                        _font,
+                        m_font,
                         brush,
-                        TextPaddingLeft,
-                        i * _lineHeight,
+                        m_nTextPaddingLeft,
+                        i * m_nLineHeight,
                         sf);
                 }
             }
@@ -151,36 +151,36 @@ namespace TextEditer
 
         private void DrawCaret(Graphics g)
         {
-            if (!_caretVisible) return;
+            if (!m_bCaretVisible) return;
 
-            int firstLine = _vScroll.Value;
-            int visible = ClientSize.Height / _lineHeight;
+            int firstLine = m_vScroll.Value;
+            int visible = ClientSize.Height / m_nLineHeight;
 
-            int screenLine = _cursor.Line - firstLine;
+            int screenLine = m_cursor.Line - firstLine;
             if (screenLine < 0 || screenLine >= visible)
                 return;
 
-            string lineText = _doc.GetLineText(_cursor.Line);
-            int col = Math.Min(_cursor.Column, lineText.Length);
+            string lineText = m_document.GetLineText(m_cursor.Line);
+            int col = Math.Min(m_cursor.Column, lineText.Length);
 
-            float x = TextPaddingLeft;
+            float x = m_nTextPaddingLeft;
             if (col > 0)
             {
                 string prefix = lineText.Substring(0, col);
-                using (var sf = new StringFormat(StringFormat.GenericTypographic)
+                using (StringFormat sf = new StringFormat(StringFormat.GenericTypographic)
                 {
                     FormatFlags = StringFormatFlags.MeasureTrailingSpaces
                 })
                 {
-                    x += g.MeasureString(prefix, _font, int.MaxValue, sf).Width;
+                    x += g.MeasureString(prefix, m_font, int.MaxValue, sf).Width;
                 }
             }
 
-            float y = screenLine * _lineHeight;
+            float y = screenLine * m_nLineHeight;
 
-            using (var b = new SolidBrush(Color.Black))
+            using (SolidBrush b = new SolidBrush(Color.Black))
             {
-                g.FillRectangle(b, x, y, 2, _lineHeight);
+                g.FillRectangle(b, x, y, 2, m_nLineHeight);
             }
         }
         // Mouse
@@ -188,40 +188,40 @@ namespace TextEditer
         {
             base.OnMouseDown(e);
 
-            if (_doc == null || _vScroll == null)
+            if (m_document == null || m_vScroll == null)
                 return;
 
             Focus();
 
-            int firstLine = _vScroll.Value;
-            int clickedLine = firstLine + (e.Y / _lineHeight);
+            int firstLine = m_vScroll.Value;
+            int clickedLine = firstLine + (e.Y / m_nLineHeight);
 
             if (clickedLine < 0)
                 clickedLine = 0;
-            if (clickedLine >= _doc.LineCount)
-                clickedLine = _doc.LineCount - 1;
+            if (clickedLine >= m_document.LineCount)
+                clickedLine = m_document.LineCount - 1;
 
             int column = GetColumnFromX(clickedLine, e.X);
 
-            _cursor.Line = clickedLine;
-            _cursor.Column = column;
-            _cursor.PreferredX = e.X;
+            m_cursor.Line = clickedLine;
+            m_cursor.Column = column;
+            m_cursor.PreferredX = e.X;
 
             Invalidate();
         }
         private int GetColumnFromX(int lineIndex, int mouseX)
         {
-            string text = _doc.GetLineText(lineIndex);
+            string text = m_document.GetLineText(lineIndex);
             if (string.IsNullOrEmpty(text))
                 return 0;
 
-            int x = TextPaddingLeft;
+            int x = m_nTextPaddingLeft;
 
             if (mouseX <= x)
                 return 0;
 
             using (Graphics g = CreateGraphics())
-            using (var sf = new StringFormat(StringFormat.GenericTypographic)
+            using (StringFormat sf = new StringFormat(StringFormat.GenericTypographic)
             {
                 FormatFlags = StringFormatFlags.MeasureTrailingSpaces
             })
@@ -232,7 +232,7 @@ namespace TextEditer
                     subString = text.Substring(0, i + 1);
                     float w = g.MeasureString(
                         subString, 
-                        _font,
+                        m_font,
                         int.MaxValue,
                         sf).Width;
 
@@ -247,7 +247,7 @@ namespace TextEditer
         {
             base.OnMouseWheel(e);
 
-            if (_doc == null || _vScroll == null)
+            if (m_document == null || m_vScroll == null)
                 return;
 
             int linesPerNotch = SystemInformation.MouseWheelScrollLines;
@@ -261,20 +261,20 @@ namespace TextEditer
         }
         private void ScrollBy(int deltaLines)
         {
-            if (_doc == null || _vScroll == null)
+            if (m_document == null || m_vScroll == null)
                 return;
 
-            int visible = Math.Max(1, ClientSize.Height / _lineHeight);
-            int maxValue = Math.Max(0, _doc.LineCount - visible);
+            int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
+            int maxValue = Math.Max(0, m_document.LineCount - visible);
 
-            int newValue = _vScroll.Value + deltaLines;
+            int newValue = m_vScroll.Value + deltaLines;
 
             if (newValue < 0) newValue = 0;
             if (newValue > maxValue) newValue = maxValue;
 
-            if (newValue != _vScroll.Value)
+            if (newValue != m_vScroll.Value)
             {
-                _vScroll.Value = newValue;
+                m_vScroll.Value = newValue;
                 Invalidate();
             }
         }
@@ -301,62 +301,62 @@ namespace TextEditer
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            if (_doc == null) return;
+            if (m_document == null) return;
 
             switch (e.KeyCode)
             {
                 case Keys.Left:
-                    if (_cursor.Column > 0)
-                        _cursor.Column--;
-                    else if (_cursor.Line > 0)
+                    if (m_cursor.Column > 0)
+                        m_cursor.Column--;
+                    else if (m_cursor.Line > 0)
                     {
-                        _cursor.Line--;
-                        _cursor.Column = _doc.GetLineText(_cursor.Line).Length;
+                        m_cursor.Line--;
+                        m_cursor.Column = m_document.GetLineText(m_cursor.Line).Length;
                     }
                     break;
 
                 case Keys.Right:
                     {
-                        int len = _doc.GetLineText(_cursor.Line).Length;
-                        if (_cursor.Column < len)
-                            _cursor.Column++;
-                        else if (_cursor.Line + 1 < _doc.LineCount)
+                        int len = m_document.GetLineText(m_cursor.Line).Length;
+                        if (m_cursor.Column < len)
+                            m_cursor.Column++;
+                        else if (m_cursor.Line + 1 < m_document.LineCount)
                         {
-                            _cursor.Line++;
-                            _cursor.Column = 0;
+                            m_cursor.Line++;
+                            m_cursor.Column = 0;
                         }
                     }
                     break;
 
                 case Keys.Up:
-                    if (_cursor.Line > 0)
-                        _cursor.Line--;
+                    if (m_cursor.Line > 0)
+                        m_cursor.Line--;
                     break;
 
                 case Keys.Down:
-                    if (_cursor.Line + 1 < _doc.LineCount)
-                        _cursor.Line++;
+                    if (m_cursor.Line + 1 < m_document.LineCount)
+                        m_cursor.Line++;
                     break;
 
                 case Keys.Enter:
-                    _doc.InsertNewLine(_cursor.Line, _cursor.Column);
-                    _cursor.Line++;
-                    _cursor.Column = 0;
+                    m_document.InsertNewLine(m_cursor.Line, m_cursor.Column);
+                    m_cursor.Line++;
+                    m_cursor.Column = 0;
                     break;
 
                 case Keys.Back:
-                    _doc.Backspace(_cursor.Line, _cursor.Column);
-                    if (_cursor.Column > 0)
-                        _cursor.Column--;
-                    else if (_cursor.Line > 0)
+                    m_document.Backspace(m_cursor.Line, m_cursor.Column);
+                    if (m_cursor.Column > 0)
+                        m_cursor.Column--;
+                    else if (m_cursor.Line > 0)
                     {
-                        _cursor.Line--;
-                        _cursor.Column = _doc.GetLineText(_cursor.Line).Length;
+                        m_cursor.Line--;
+                        m_cursor.Column = m_document.GetLineText(m_cursor.Line).Length;
                     }
                     break;
 
                 case Keys.Delete:
-                    _doc.Delete(_cursor.Line, _cursor.Column);
+                    m_document.Delete(m_cursor.Line, m_cursor.Column);
                     break;
             }
 
@@ -366,28 +366,28 @@ namespace TextEditer
 
         protected override void OnKeyPress(KeyPressEventArgs e)
         {
-            if (_doc == null) return;
+            if (m_document == null) return;
 
             if (!char.IsControl(e.KeyChar))
             {
-                _doc.InsertChar(_cursor.Line, _cursor.Column, e.KeyChar);
-                _cursor.Column++;
+                m_document.InsertChar(m_cursor.Line, m_cursor.Column, e.KeyChar);
+                m_cursor.Column++;
                 Invalidate();
             }
         }
 
         private void EnsureCaretVisible()
         {
-            if (_vScroll == null) return;
+            if (m_vScroll == null) return;
 
-            int visible = Math.Max(1, ClientSize.Height / _lineHeight);
+            int visible = Math.Max(1, ClientSize.Height / m_nLineHeight);
 
-            if (_cursor.Line < _vScroll.Value)
-                _vScroll.Value = _cursor.Line;
-            else if (_cursor.Line >= _vScroll.Value + visible)
-                _vScroll.Value = Math.Min(
-                    _vScroll.Maximum,
-                    _cursor.Line - visible + 1);
+            if (m_cursor.Line < m_vScroll.Value)
+                m_vScroll.Value = m_cursor.Line;
+            else if (m_cursor.Line >= m_vScroll.Value + visible)
+                m_vScroll.Value = Math.Min(
+                    m_vScroll.Maximum,
+                    m_cursor.Line - visible + 1);
         }
     }
 
