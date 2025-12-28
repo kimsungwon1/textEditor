@@ -225,10 +225,9 @@ namespace TextEditer
                 cLogger.Instance.AddLog(eLogType.ERROR, exception);
             }
         }
-
-        bool IsMoreBackgroundText()
+        public void OnDispose()
         {
-            return false;
+            textEditer?.OnDispose();
         }
     }
 }

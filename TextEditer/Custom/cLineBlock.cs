@@ -160,7 +160,8 @@ namespace TextEditer
                 }
             }
 
-            throw new ArgumentOutOfRangeException(nameof(globalLine));
+            innerIndex = 0;
+            return null;
         }
         public void InsertChar(int globalLine, int column, char ch)
         {
@@ -169,6 +170,10 @@ namespace TextEditer
 
             int inner;
             cLineBlock block = FindBlock(globalLine, out inner);
+            if (block == null)
+            {
+                return;
+            }
             cLineRef line = block.m_listLines[inner];
 
             string text;
@@ -198,6 +203,10 @@ namespace TextEditer
         {
             int inner;
             cLineBlock block = FindBlock(globalLine, out inner);
+            if(block == null)
+            {
+                return;
+            }
             cLineRef line = block.m_listLines[inner];
 
             string text = line.IsDirty ? (line.EditedText ?? string.Empty) : m_buffer.ReadUtf8(line.FileSpan.Offset, line.FileSpan.ByteLength);
@@ -264,6 +273,10 @@ namespace TextEditer
         {
             int inner;
             cLineBlock block = FindBlock(globalLine, out inner);
+            if (block == null)
+            {
+                return "";
+            }
             cLineRef line = block.m_listLines[inner];
 
             if (line.IsDirty)
@@ -346,6 +359,10 @@ namespace TextEditer
                 string newText = text.Remove(column, 1);
                 line.MakeDirty(newText);
             }
+        }
+        public void Dispose()
+        {
+            m_buffer.Dispose();
         }
     }
 }

@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -28,10 +29,14 @@ namespace TextEditer
         private readonly Font m_font = new Font("Consolas", 10);
         private readonly int m_nLineHeight = 16;
 
-        private readonly Timer m_caretTimer;
+        private readonly System.Windows.Forms.Timer m_caretTimer;
         private bool m_bCaretVisible = true;
-
+        private Panel pnSearch;
+        private TextBox tbSearch;
+        private Button btnClose;
         private const int m_nTextPaddingLeft = 4;
+
+        private CancellationTokenSource m_ctsSearch;
 
         public VirtualTextEditer()
         {
@@ -49,13 +54,16 @@ namespace TextEditer
             ForeColor = Color.Black;
             TabStop = true;
 
-            m_caretTimer = new Timer { Interval = 500 };
+            m_caretTimer = new System.Windows.Forms.Timer { Interval = 500 };
             m_caretTimer.Tick += (_, __) =>
             {
                 m_bCaretVisible = !m_bCaretVisible;
                 Invalidate();
             };
             m_caretTimer.Start();
+
+            m_nLineHeight = m_font.Height;
+            InitializeComponent();
         }
 
         // 파일 로드 (진입점)
@@ -183,6 +191,40 @@ namespace TextEditer
                 g.FillRectangle(b, x, y, 2, m_nLineHeight);
             }
         }
+        private int GetColumnFromX(int lineIndex, int mouseX)
+        {
+            string text = m_document.GetLineText(lineIndex);
+            if (string.IsNullOrEmpty(text))
+                return 0;
+
+            int x = m_nTextPaddingLeft;
+
+            if (mouseX <= x)
+                return 0;
+
+            using (Graphics g = CreateGraphics())
+            using (StringFormat sf = new StringFormat(StringFormat.GenericTypographic)
+            {
+                FormatFlags = StringFormatFlags.MeasureTrailingSpaces
+            })
+            {
+                string subString;
+                for (int i = 0; i < text.Length; i++)
+                {
+                    subString = text.Substring(0, i + 1);
+                    float w = g.MeasureString(
+                        subString,
+                        m_font,
+                        int.MaxValue,
+                        sf).Width;
+
+                    if (mouseX < x + w)
+                        return i;
+                }
+            }
+
+            return text.Length;
+        }
         // Mouse
         protected override void OnMouseDown(MouseEventArgs e)
         {
@@ -207,42 +249,11 @@ namespace TextEditer
             m_cursor.Column = column;
             m_cursor.PreferredX = e.X;
 
+            pnSearch.Visible = false;
+
             Invalidate();
         }
-        private int GetColumnFromX(int lineIndex, int mouseX)
-        {
-            string text = m_document.GetLineText(lineIndex);
-            if (string.IsNullOrEmpty(text))
-                return 0;
-
-            int x = m_nTextPaddingLeft;
-
-            if (mouseX <= x)
-                return 0;
-
-            using (Graphics g = CreateGraphics())
-            using (StringFormat sf = new StringFormat(StringFormat.GenericTypographic)
-            {
-                FormatFlags = StringFormatFlags.MeasureTrailingSpaces
-            })
-            {
-                string subString;
-                for (int i = 0; i < text.Length; i++)
-                {
-                    subString = text.Substring(0, i + 1);
-                    float w = g.MeasureString(
-                        subString, 
-                        m_font,
-                        int.MaxValue,
-                        sf).Width;
-
-                    if (mouseX < x + w)
-                        return i;
-                }
-            }
-
-            return text.Length;
-        }
+        
         protected override void OnMouseWheel(MouseEventArgs e)
         {
             base.OnMouseWheel(e);
@@ -277,6 +288,8 @@ namespace TextEditer
                 m_vScroll.Value = newValue;
                 Invalidate();
             }
+
+            UpdateScrollBar();
         }
         // Keyboard
         protected override bool IsInputKey(Keys keyData)
@@ -302,6 +315,17 @@ namespace TextEditer
         protected override void OnKeyDown(KeyEventArgs e)
         {
             if (m_document == null) return;
+
+            // ctrl
+            if(e.Control)
+            {
+                if(e.KeyCode == Keys.F)
+                {
+                    pnSearch.Visible = true;
+                    e.Handled = true;
+                    return;
+                }
+            }
 
             switch (e.KeyCode)
             {
@@ -388,6 +412,100 @@ namespace TextEditer
                 m_vScroll.Value = Math.Min(
                     m_vScroll.Maximum,
                     m_cursor.Line - visible + 1);
+        }
+
+        private void InitializeComponent()
+        {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(VirtualTextEditer));
+            this.pnSearch = new System.Windows.Forms.Panel();
+            this.tbSearch = new System.Windows.Forms.TextBox();
+            this.btnClose = new System.Windows.Forms.Button();
+            this.pnSearch.SuspendLayout();
+            this.SuspendLayout();
+            // 
+            // pnSearch
+            // 
+            this.pnSearch.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.pnSearch.Controls.Add(this.btnClose);
+            this.pnSearch.Controls.Add(this.tbSearch);
+            this.pnSearch.Location = new System.Drawing.Point(179, 3);
+            this.pnSearch.Name = "pnSearch";
+            this.pnSearch.Size = new System.Drawing.Size(398, 37);
+            this.pnSearch.TabIndex = 2;
+            this.pnSearch.Visible = false;
+            // 
+            // tbSearch
+            // 
+            this.tbSearch.Location = new System.Drawing.Point(3, 4);
+            this.tbSearch.Multiline = true;
+            this.tbSearch.Name = "tbSearch";
+            this.tbSearch.Size = new System.Drawing.Size(350, 29);
+            this.tbSearch.TabIndex = 0;
+            this.tbSearch.KeyDown += new System.Windows.Forms.KeyEventHandler(this.tbSearch_KeyDown);
+            // 
+            // btnClose
+            // 
+            this.btnClose.Image = ((System.Drawing.Image)(resources.GetObject("btnClose.Image")));
+            this.btnClose.Location = new System.Drawing.Point(360, 4);
+            this.btnClose.Name = "btnClose";
+            this.btnClose.Size = new System.Drawing.Size(35, 29);
+            this.btnClose.TabIndex = 1;
+            this.btnClose.UseVisualStyleBackColor = true;
+            this.btnClose.Click += new System.EventHandler(this.btnClose_Click);
+            // 
+            // VirtualTextEditer
+            // 
+            this.Controls.Add(this.pnSearch);
+            this.Name = "VirtualTextEditer";
+            this.Size = new System.Drawing.Size(580, 535);
+            this.pnSearch.ResumeLayout(false);
+            this.pnSearch.PerformLayout();
+            this.ResumeLayout(false);
+
+        }
+
+        private void tbSearch_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+
+                StartSearch(tbSearch.Text);
+
+            }
+        }
+
+        private void StartSearch(string sKeyword)
+        {
+            m_ctsSearch?.Cancel();
+            m_ctsSearch = new CancellationTokenSource();
+            CancellationToken token = m_ctsSearch.Token;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    IEnumerable<SearchHit> searchedResult = cSearcher.Search(m_document, sKeyword, token);
+                    foreach (SearchHit hit in searchedResult)
+                    {
+                        BeginInvoke(new Action(() => { }));
+                    }
+                }
+                catch (Exception ex)
+                {
+
+                }
+            });
+        }
+
+        private void btnClose_Click(object sender, EventArgs e)
+        {
+            pnSearch.Visible = false;
+        }
+
+        public void OnDispose()
+        {
+            m_document?.Dispose();
         }
     }
 

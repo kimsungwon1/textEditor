@@ -197,6 +197,7 @@ namespace TextEditer
                             return DialogResult.Cancel;
                     }
                 }
+                selectedTab.OnDispose();
                 tcTabControl.TabPages.RemoveAt(tcTabControl.SelectedIndex);
                 return messageResult;
             }
