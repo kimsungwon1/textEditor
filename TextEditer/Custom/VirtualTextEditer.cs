@@ -69,6 +69,7 @@ namespace TextEditer
         // 파일 로드 (진입점)
         public void LoadFile(string path)
         {
+            m_document?.Dispose();
             cTextBuffer buffer = new cTextBuffer(path);
             IEnumerable<LineSpan> lines = cLineIndexer.Scan(buffer);
 
@@ -83,7 +84,60 @@ namespace TextEditer
 
             Invalidate();
         }
+        public void Save(string path)
+        {
+            string tempPath = path + ".tmp";
 
+            using (var fs = new FileStream(
+                tempPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None))
+            using (var writer = new StreamWriter(fs, new UTF8Encoding(false)))
+            {
+                WriteDocumentTo(writer);
+            }
+
+            // 기존 파일 교체 (원자적)
+            ReplaceFile(tempPath, path);
+
+            // 저장 완료 후: 스냅샷 재생성
+            ReloadAfterSave(path);
+        }
+        private void WriteDocumentTo(StreamWriter writer)
+        {
+            int lineCount = m_document.LineCount;
+            for (int i = 0; i < lineCount; i++)
+            {
+                string sLine = m_document.GetLineText(i);
+
+                writer.Write(sLine);
+                if (i < lineCount - 1)
+                {
+                    writer.Write("\n");
+                }
+            }
+        }
+        private void ReplaceFile(string tempPath, string targetPath)
+        {
+            if (File.Exists(targetPath))
+            {
+                // Windows 원자적 교체
+                File.Replace(
+                    tempPath,
+                    targetPath,
+                    null,
+                    ignoreMetadataErrors: true);
+            }
+            else
+            {
+                File.Move(tempPath, targetPath);
+            }
+        }
+        private void ReloadAfterSave(string path)
+        {
+            LoadFile(path);
+        }
         // Scroll
         private void EnsureScroll()
         {

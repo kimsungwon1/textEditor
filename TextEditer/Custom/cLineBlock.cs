@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -360,6 +361,7 @@ namespace TextEditer
                 line.MakeDirty(newText);
             }
         }
+        
         public void Dispose()
         {
             m_buffer.Dispose();

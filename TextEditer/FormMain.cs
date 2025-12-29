@@ -345,7 +345,7 @@ namespace TextEditer
                 ucTabTextBox currentTab = GetSelectedTab();
                 TabPage tabPage = tcTabControl.SelectedTab;
 
-                currentTab.SaveData(currentTab.sFileName);
+                currentTab.SaveData(currentTab.sFileFullPath);
 
                 tabPage.Text = currentTab.sFileName;
             }
@@ -380,7 +380,7 @@ namespace TextEditer
                 {
                     ucTabTextBox perTab = tpPage.Controls[0] as ucTabTextBox;
 
-                    perTab.SaveData(perTab.sFileName);
+                    perTab.SaveData(perTab.sFileFullPath);
 
                     tpPage.Text = perTab.sFileName;
                 }

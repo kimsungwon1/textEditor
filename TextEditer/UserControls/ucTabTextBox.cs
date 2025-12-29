@@ -58,7 +58,7 @@ namespace TextEditer
                 }
                 else
                 {
-                    // textEditer.Save();
+                    textEditer.Save(sFilePath);
                     m_dateTimeLastWrited = File.GetLastWriteTime(sFilePath);
                 }
             }
@@ -79,7 +79,7 @@ namespace TextEditer
                 {
                     sFileFullPath = dl.FileName;
                     nSaved = 1;
-                    // textEditer.SaveAs(dl.FileName);
+                    textEditer.Save(dl.FileName);
                     
                     m_dateTimeLastWrited = File.GetLastWriteTime(sFileFullPath);
                 }
@@ -156,11 +156,7 @@ namespace TextEditer
         {
             try
             {
-                // Stream stream = new FileStream(sFileFullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                // using (StreamReader reader = new StreamReader(stream, true))
-                // {
-                //     rtbTextBox.Text = reader.ReadToEnd();
-                // }
+                textEditer.LoadFile(sFileFullPath);
                 return true;
             }
             catch (Exception exception)

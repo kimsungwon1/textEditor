@@ -15,15 +15,47 @@ namespace TextEditer
         private readonly MemoryMappedFile m_memoryMappedFile;
         private readonly MemoryMappedViewAccessor m_memoryMappedViewAccessor;
 
+        public string m_currentFilePath { get; }
+        public DateTime SnapshotWriteTimeUtc { get; private set; }
+        public long SnapshotSourceLength { get; private set; }
+        public long OpenedFileLength { get; }
         public long Length { get; private set; }
 
         public cTextBuffer(string path)
         {
+            m_currentFilePath = path;
+
             FileInfo fi = new FileInfo(path);
             Length = fi.Length;
 
-            m_memoryMappedFile = MemoryMappedFile.CreateFromFile(path, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
-            m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, Length, MemoryMappedFileAccess.Read);
+            SnapshotWriteTimeUtc = fi.LastWriteTimeUtc;
+            SnapshotSourceLength = fi.Length;
+            OpenedFileLength = fi.Length;
+
+            m_memoryMappedFile = MemoryMappedFile.CreateNew(null, Length, MemoryMappedFileAccess.ReadWrite);
+            m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, Length, MemoryMappedFileAccess.ReadWrite);
+
+            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                CopyToSnapShot(fs);
+            }
+        }
+
+        private void CopyToSnapShot(FileStream fs)
+        {
+            const int Chunk = 1024 * 1024;
+            byte[] buf = new byte[Chunk];
+
+            long dstOffset = 0;
+            while (dstOffset < Length)
+            {
+                int toRead = (int)Math.Min(Chunk, Length - dstOffset);
+                int read = fs.Read(buf, 0, toRead);
+                if (read <= 0) break;
+
+                m_memoryMappedViewAccessor.WriteArray(dstOffset, buf, 0, read);
+                dstOffset += read;
+            }
         }
 
         public int ReadBytes(long fileOffset, byte[] dest, int destIndex, int count)
