@@ -16,7 +16,7 @@ namespace TextEditer
             if (buffer == null)
                 throw new ArgumentNullException(nameof(buffer));
 
-            long fileLength = buffer.Length;
+            long fileLength = buffer.m_dwLength;
 
             byte[] buf = new byte[BufferSize];
 

@@ -15,25 +15,23 @@ namespace TextEditer
         private readonly MemoryMappedFile m_memoryMappedFile;
         private readonly MemoryMappedViewAccessor m_memoryMappedViewAccessor;
 
-        public string m_currentFilePath { get; }
-        public DateTime SnapshotWriteTimeUtc { get; private set; }
-        public long SnapshotSourceLength { get; private set; }
-        public long OpenedFileLength { get; }
-        public long Length { get; private set; }
+        public string m_sCurrentFilePath { get; }
+        public long m_dwSnapshotSourceLength { get; private set; }
+        public long m_dwOpenedFileLength { get; }
+        public long m_dwLength { get; private set; }
 
         public cTextBuffer(string path)
         {
-            m_currentFilePath = path;
+            m_sCurrentFilePath = path;
 
             FileInfo fi = new FileInfo(path);
-            Length = fi.Length;
+            m_dwLength = fi.Length;
 
-            SnapshotWriteTimeUtc = fi.LastWriteTimeUtc;
-            SnapshotSourceLength = fi.Length;
-            OpenedFileLength = fi.Length;
+            m_dwSnapshotSourceLength = fi.Length;
+            m_dwOpenedFileLength = fi.Length;
 
-            m_memoryMappedFile = MemoryMappedFile.CreateNew(null, Length, MemoryMappedFileAccess.ReadWrite);
-            m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, Length, MemoryMappedFileAccess.ReadWrite);
+            m_memoryMappedFile = MemoryMappedFile.CreateNew(null, m_dwLength, MemoryMappedFileAccess.ReadWrite);
+            m_memoryMappedViewAccessor = m_memoryMappedFile.CreateViewAccessor(0, m_dwLength, MemoryMappedFileAccess.ReadWrite);
 
             using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
@@ -47,9 +45,9 @@ namespace TextEditer
             byte[] buf = new byte[Chunk];
 
             long dstOffset = 0;
-            while (dstOffset < Length)
+            while (dstOffset < m_dwLength)
             {
-                int toRead = (int)Math.Min(Chunk, Length - dstOffset);
+                int toRead = (int)Math.Min(Chunk, m_dwLength - dstOffset);
                 int read = fs.Read(buf, 0, toRead);
                 if (read <= 0) break;
 
@@ -60,12 +58,12 @@ namespace TextEditer
 
         public int ReadBytes(long fileOffset, byte[] dest, int destIndex, int count)
         {
-            if (fileOffset < 0 || fileOffset > Length) throw new ArgumentOutOfRangeException(nameof(fileOffset));
+            if (fileOffset < 0 || fileOffset > m_dwLength) throw new ArgumentOutOfRangeException(nameof(fileOffset));
             if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
             if (dest == null) throw new ArgumentNullException(nameof(dest));
             if (destIndex < 0 || destIndex + count > dest.Length) throw new ArgumentOutOfRangeException(nameof(destIndex));
 
-            int toRead = (int)Math.Min(count, Length - fileOffset);
+            int toRead = (int)Math.Min(count, m_dwLength - fileOffset);
             if (toRead <= 0) return 0;
 
             m_memoryMappedViewAccessor.ReadArray(fileOffset, dest, destIndex, toRead);
